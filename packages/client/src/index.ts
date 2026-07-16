@@ -1,0 +1,23 @@
+export {
+  BeatAPIClient,
+  type BeatAPIClientOptions,
+  type BeatAPIDeleteResult,
+  type BeatAPIFile,
+  type BeatAPIShotMedia,
+  type BeatAPITask,
+  type BeatAPITaskStatus,
+  type BeatAPIUsage,
+  type BeatAPIWebhook,
+  type BeatAPIWorkflow,
+  type CreateWebhookInput,
+  type EcommerceVideoTaskInput,
+  type MusicVideoComposeInput,
+  type MusicVideoShotEditInput,
+  type MusicVideoTaskInput,
+  type RetryOptions,
+  type UpdateWebhookInput,
+  type UploadFileOptions,
+  type WaitForTaskOptions,
+} from "./client.js";
+export { BeatAPIError, type BeatAPIErrorOptions } from "./errors.js";
+export type { components, operations, paths } from "./types.generated.js";

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "beatapi-client": [
+        "packages/client/src/index.ts"
+      ]
+    }
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/client"
+    },
+    {
+      "path": "./packages/cli"
+    }
+  ]
+}

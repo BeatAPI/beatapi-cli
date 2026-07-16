@@ -1,0 +1,50 @@
+{
+  "name": "beatapi",
+  "version": "0.1.0",
+  "description": "Command-line interface for BeatAPI AI music video and ecommerce video workflows.",
+  "type": "module",
+  "bin": {
+    "beatapi": "./dist/bin.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "beatapi-client": "0.1.0",
+    "cross-keychain": "1.1.0"
+  },
+  "engines": {
+    "node": ">=20.19.0 <21 || >=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erickkkyt/beatapi-cli.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/erickkkyt/beatapi-cli/issues"
+  },
+  "homepage": "https://beatapi.io/docs",
+  "keywords": [
+    "beatapi",
+    "cli",
+    "ai-video",
+    "music-video",
+    "ecommerce-video",
+    "automation"
+  ],
+  "license": "MIT"
+}

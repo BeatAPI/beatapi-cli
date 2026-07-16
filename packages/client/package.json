@@ -1,0 +1,49 @@
+{
+  "name": "beatapi-client",
+  "version": "0.1.0",
+  "description": "Type-safe JavaScript and TypeScript client for the BeatAPI async video API.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "engines": {
+    "node": ">=20.19.0 <21 || >=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erickkkyt/beatapi-cli.git",
+    "directory": "packages/client"
+  },
+  "bugs": {
+    "url": "https://github.com/erickkkyt/beatapi-cli/issues"
+  },
+  "homepage": "https://beatapi.io/docs",
+  "keywords": [
+    "beatapi",
+    "ai-video",
+    "music-video",
+    "ecommerce-video",
+    "typescript",
+    "sdk"
+  ],
+  "license": "MIT"
+}
