@@ -2,7 +2,7 @@
 
 ## One-time setup
 
-1. Create the public GitHub repository `erickkkyt/beatapi-cli`.
+1. Use the public GitHub repository `BeatAPI/beatapi-cli`.
 2. Log in to npm with the BeatAPI publishing account.
 3. Publish or reserve both package names: `beatapi-client` and `beatapi`.
 4. In GitHub, create an environment named `npm`.

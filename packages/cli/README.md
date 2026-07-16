@@ -23,5 +23,5 @@ cleanly with shell scripts and automation tools.
 Webhook creation writes the one-time signing secret to a mode-`0600` file and
 returns its path as `secret_file`; it does not print the secret.
 
-See the [repository](https://github.com/erickkkyt/beatapi-cli) for the complete
+See the [repository](https://github.com/BeatAPI/beatapi-cli) for the complete
 command reference and security model.

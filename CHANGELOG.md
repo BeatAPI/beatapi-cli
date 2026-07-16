@@ -20,5 +20,5 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Structured errors, request IDs, bounded retries, CI, package checks, and npm
   release automation.
 
-[Unreleased]: https://github.com/erickkkyt/beatapi-cli/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/erickkkyt/beatapi-cli/releases/tag/v0.1.0
+[Unreleased]: https://github.com/BeatAPI/beatapi-cli/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/BeatAPI/beatapi-cli/releases/tag/v0.1.0

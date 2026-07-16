@@ -29,5 +29,5 @@ The exported request and response types are generated from the reviewed
 BeatAPI OpenAPI contract. The runtime client preserves structured API errors,
 request IDs, retry hints, and supports bounded opt-in retries.
 
-See the [repository](https://github.com/erickkkyt/beatapi-cli) for all methods,
+See the [repository](https://github.com/BeatAPI/beatapi-cli) for all methods,
 security guidance, and contract verification.
