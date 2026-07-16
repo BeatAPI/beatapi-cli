@@ -1,0 +1,1536 @@
+openapi: 3.1.0
+info:
+  title: BeatAPI Developer API
+  version: 1.0.0-launch
+  license:
+    name: BeatAPI Terms of Service
+    url: https://beatapi.io/terms-of-service
+  description: |
+    BeatAPI is a simple async API for video workflows. Most integrations use the
+    same loop: create a task, poll the task until it finishes, then read the
+    hosted video URL from `output.media`.
+
+    ## 5 minute Quick Start
+
+    1. Set your base URL to `https://api.beatapi.io`.
+    2. Create an API key in Dashboard and send it as
+       `Authorization: Bearer <BEATAPI_API_KEY>`.
+    3. Use public HTTPS URLs for input media. If your files are local, upload
+       them with `POST /v1/files` first.
+    4. Create a workflow task.
+    5. Poll every 5-10 seconds until `status` is `succeeded` or `failed`.
+    6. Add webhooks later if you do not want to poll.
+
+    ```bash
+    export BEATAPI_API_KEY="sk_your_key"
+
+    curl https://api.beatapi.io/v1/workflows
+
+    curl https://api.beatapi.io/v1/music-video/tasks \
+      -H "Authorization: Bearer $BEATAPI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "images": ["https://media.beatapi.io/samples/neon-singer.png"],
+        "audio_url": "https://media.beatapi.io/samples/neon-singer-preview.mp3",
+        "prompt": "Neon rooftop performance with cinematic light trails.",
+        "language": "en",
+        "resolution": "720p"
+      }'
+
+    curl https://api.beatapi.io/v1/tasks/task_8K2qA \
+      -H "Authorization: Bearer $BEATAPI_API_KEY"
+    ```
+
+    ## How tasks work
+
+    A task starts as `queued` or `processing`. Keep polling
+    `GET /v1/tasks/{task_id}` every 5-10 seconds with a little jitter. Stop when
+    the task is `succeeded` or `failed`.
+
+    - `queued`: accepted and waiting for platform capacity.
+    - `processing`: generation is running.
+    - `storyboard_ready`: Music Video storyboard shots are available.
+    - `requires_action`: choose storyboard shots and call compose.
+    - `editing`: a storyboard shot edit is running.
+    - `composing`: selected storyboard shots are being composed.
+    - `succeeded`: output is ready in `output.media[]`.
+    - `failed`: no usable output was produced. Inspect `error_code`,
+      `error_message`, and `usage` for the final task result.
+
+    The current 10 minute processing window is an operational timeout for launch
+    testing, not a completion SLA.
+
+    ## Inputs and limits
+
+    Public workflow inputs must use HTTPS URLs that are reachable from the
+    public internet. Localhost, private network URLs, and data URLs are rejected.
+    Use `POST /v1/files` for local images, audio, or subtitles.
+
+    Each verified new user account starts with 50 welcome credits valid for 14 days and
+    1 active processing concurrency. Lifetime paid credit purchases unlock higher limits:
+    $10+ = 2, $100+ = 5, $1,000+ = 10, $5,000+ = 15, and $20,000+ = 30.
+    `GET /v1/usage` returns current usage totals, concurrency limit, and active
+    processing task count. Active concurrency measures tasks that are currently
+    using BeatAPI processing resources. storyboard_ready and requires_action
+    tasks can have settled credits but do not count toward active processing
+    concurrency.
+
+    ## Webhooks are optional
+
+    Polling is the simplest integration path. If you add webhooks, BeatAPI sends
+    `task.succeeded` and `task.failed` events. Webhook delivery failures do not
+    change task status; polling remains the source of truth.
+servers:
+  - url: https://api.beatapi.io
+externalDocs:
+  description: BeatAPI documentation
+  url: https://docs.beatapi.io
+tags:
+  - name: Workflows
+    description: Discover the workflow IDs available for task creation.
+  - name: Music Video
+    description: Create music video tasks from images, audio, and optional creative controls.
+  - name: Ecommerce Video
+    description: Create product ad video tasks from product images and duration.
+  - name: Tasks
+    description: Poll task status and read output URLs.
+  - name: Usage
+    description: Inspect task totals and account concurrency.
+  - name: Files
+    description: Upload local assets and use the returned HTTPS URL as workflow input.
+  - name: Webhooks
+    description: Manage optional completion callbacks.
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: sk_xxx
+      description: 'Send your API key as `Authorization: Bearer <BEATAPI_API_KEY>`.'
+  schemas:
+    Workflow:
+      type: object
+      required: [id, object, name, description]
+      properties:
+        id:
+          type: string
+          enum: [music-video, ecommerce-video]
+          example: music-video
+        object:
+          type: string
+          enum: [workflow]
+        name:
+          type: string
+          example: Music Video API
+        description:
+          type: string
+    TaskStatus:
+      type: string
+      enum: [queued, processing, storyboard_ready, requires_action, editing, composing, succeeded, failed]
+    StoryboardShot:
+      type: object
+      required: [id, index, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          description: BeatAPI shot id. Use this id for media retrieval, edit, and compose operations.
+          example: shot_xxx
+        index:
+          type: integer
+          example: 0
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        duration_seconds:
+          type: integer
+          example: 5
+        prompt:
+          type: string
+          example: Opening lyric shot.
+        lyric_text:
+          type: string
+          example: Intro
+        media:
+          type: object
+          description: Present only after the shot media has been materialized or after a shot edit finishes.
+          properties:
+            type:
+              type: string
+              example: video
+            url:
+              type: string
+              format: uri
+              example: https://media.beatapi.io/outputs/task_8K2qA/shots/0.mp4
+            mime_type:
+              type: string
+              example: video/mp4
+        created_at:
+          type: integer
+          example: 1782210000
+        updated_at:
+          type: integer
+          example: 1782210300
+    Storyboard:
+      type: object
+      required: [shots]
+      properties:
+        shots:
+          type: array
+          items:
+            $ref: '#/components/schemas/StoryboardShot'
+    ShotMedia:
+      type: object
+      required: [object, task_id, shot_id, index, status, media, created_at, updated_at, request_id]
+      properties:
+        object:
+          type: string
+          enum: [shot_media]
+        task_id:
+          type: string
+          example: task_8K2qA
+        shot_id:
+          type: string
+          example: shot_xxx
+        index:
+          type: integer
+          example: 0
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        media:
+          type: object
+          required: [type, url, mime_type]
+          properties:
+            type:
+              type: string
+              enum: [video]
+            url:
+              type: string
+              format: uri
+              example: https://media.beatapi.io/outputs/task_8K2qA/shots/shot_xxx/current.mp4
+            mime_type:
+              type: string
+              example: video/mp4
+        created_at:
+          type: integer
+          example: 1782210000
+        updated_at:
+          type: integer
+          example: 1782210300
+        request_id:
+          type: string
+          example: req_abc123
+    TaskUsage:
+      type: object
+      required: [credits_reserved, credits_settled, credits_refunded, credits_charged]
+      properties:
+        credits_reserved:
+          type: integer
+          description: BeatAPI customer credits reserved for this task.
+        credits_charged:
+          type: integer
+          description: BeatAPI customer credits charged when the task or operation is accepted.
+        billable_duration_seconds:
+          type: integer
+          description: Server-detected or request-declared billable duration used for credit calculation.
+        credits_settled:
+          type: integer
+          description: BeatAPI customer credits settled after successful work.
+        credits_refunded:
+          type: integer
+          description: BeatAPI customer credits refunded after failed eligible work.
+    Task:
+      type: object
+      required: [id, object, workflow, status, stage, created_at, updated_at, completed_at, output, usage, request_id, error_code, error_message]
+      properties:
+        id:
+          type: string
+          example: task_8K2qA
+        object:
+          type: string
+          enum: [task]
+        workflow:
+          type: string
+          enum: [music-video, ecommerce-video]
+          example: music-video
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        stage:
+          $ref: '#/components/schemas/TaskStatus'
+        storyboard:
+          $ref: '#/components/schemas/Storyboard'
+        created_at:
+          type: integer
+        updated_at:
+          type: integer
+        completed_at:
+          type: [integer, 'null']
+        output:
+          description: Output is null until the task succeeds.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [media, r2_url]
+              properties:
+                media:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, url, mime_type]
+                    properties:
+                      type:
+                        type: string
+                        enum: [video]
+                      url:
+                        type: string
+                        format: uri
+                      mime_type:
+                        type: string
+                        example: video/mp4
+                r2_url:
+                  type: string
+                  format: uri
+        usage:
+          $ref: '#/components/schemas/TaskUsage'
+        request_id:
+          type: string
+          example: req_abc123
+        error_code:
+          type: [string, 'null']
+          example: processing_timeout
+        error_message:
+          type: [string, 'null']
+    File:
+      type: object
+      required: [id, object, url, key, mime_type, size_bytes, purpose, created_at]
+      properties:
+        id:
+          type: string
+          example: file_3xYz9
+        object:
+          type: string
+          enum: [file]
+        url:
+          type: string
+          format: uri
+          example: https://media.beatapi.io/inputs/file_3xYz9.mp3
+        key:
+          type: string
+          example: inputs/file_3xYz9.mp3
+        mime_type:
+          type: string
+          example: audio/mpeg
+        size_bytes:
+          type: integer
+          example: 1048576
+        audio_duration_seconds:
+          type: number
+          description: Present for uploaded audio files after server-side duration detection.
+          example: 64.02
+        audio_duration_source:
+          type: string
+          description: Duration detection method used for uploaded audio.
+          example: mp3_frame_scan
+        purpose:
+          type: string
+          enum: [input]
+        created_at:
+          type: integer
+          example: 1782210000
+    WebhookEndpoint:
+      type: object
+      required: [id, object, url, description, events, status, secret, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          example: wh_9aBcD
+        object:
+          type: string
+          enum: [webhook_endpoint]
+        url:
+          type: string
+          format: uri
+          example: https://example.com/beatapi-webhook
+        description:
+          type: string
+          example: Production webhook
+        events:
+          type: array
+          items:
+            type: string
+            enum: [task.succeeded, task.failed]
+        status:
+          type: string
+          enum: [active, disabled]
+        secret:
+          type: string
+          description: Returned in full only when the endpoint is created. Later responses return a masked value.
+          example: whsec_example_masked
+        created_at:
+          type: integer
+        updated_at:
+          type: integer
+    WebhookEvent:
+      type: object
+      required: [id, event, created_at, data]
+      properties:
+        id:
+          type: string
+          example: evt_123
+        event:
+          type: string
+          enum: [task.succeeded, task.failed]
+        created_at:
+          type: integer
+        data:
+          $ref: '#/components/schemas/Task'
+    WorkflowList:
+      type: object
+      required: [object, data]
+      properties:
+        object:
+          type: string
+          enum: [list]
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Workflow'
+    WorkflowListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/WorkflowList'
+    TaskResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Task'
+    Usage:
+      type: object
+      required: [object, credit_balance, total_tasks, credits_settled, credits_refunded, concurrency, by_workflow]
+      properties:
+        object:
+          type: string
+          enum: [usage]
+        credit_balance:
+          type: integer
+          description: Current credit balance. It may be negative.
+        total_tasks:
+          type: integer
+        credits_settled:
+          type: integer
+        credits_refunded:
+          type: integer
+        concurrency:
+          type: object
+          required: [limit, active]
+          properties:
+            limit:
+              type: integer
+              example: 2
+            active:
+              type: integer
+              description: Active processing tasks currently using BeatAPI processing resources. Music Video storyboard_ready and requires_action tasks can have settled credits without counting toward this value.
+        by_workflow:
+          type: array
+          items:
+            type: object
+            required: [workflow, tasks, credits_settled]
+            properties:
+              workflow:
+                type: string
+                enum: [music-video, ecommerce-video]
+              tasks:
+                type: integer
+              credits_settled:
+                type: integer
+    UsageResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Usage'
+    FileResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/File'
+    WebhookEndpointList:
+      type: object
+      required: [object, data]
+      properties:
+        object:
+          type: string
+          enum: [list]
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookEndpoint'
+    WebhookEndpointListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/WebhookEndpointList'
+    WebhookEndpointResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/WebhookEndpoint'
+    DeleteResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, deleted]
+          properties:
+            id:
+              type: string
+            deleted:
+              type: boolean
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              enum:
+                - bad_request
+                - unauthorized
+                - forbidden
+                - not_found
+                - insufficient_credits
+                - idempotency_conflict
+                - user_concurrency_exceeded
+                - rate_limit_exceeded
+                - processing_unavailable
+                - processing_failed
+                - processing_timeout
+                - result_transfer_failed
+                - invalid_signature
+                - internal_error
+            message:
+              type: string
+            request_id:
+              type: string
+            retry_after_seconds:
+              type: integer
+              description: Present on rate_limit_exceeded responses when the client should wait before retrying.
+  responses:
+    Unauthorized:
+      description: Missing, invalid, or inactive API key.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: unauthorized
+              message: Missing or invalid API key.
+              request_id: req_xxx
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: bad_request
+              message: images must contain 1-7 public HTTPS URLs.
+              request_id: req_xxx
+    RateLimited:
+      description: Request rate limit exceeded.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying the request.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: rate_limit_exceeded
+              message: Too many polling requests. Poll every 5-10 seconds.
+              request_id: req_xxx
+              retry_after_seconds: 12
+paths:
+  /v1/workflows:
+    get:
+      operationId: listWorkflows
+      tags: [Workflows]
+      summary: List launch workflows
+      security: []
+      responses:
+        '200':
+          description: Workflow list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowListResponse'
+              example:
+                data:
+                  object: list
+                  data:
+                    - id: music-video
+                      object: workflow
+                      name: Music Video API
+                      description: Generate short music video clips from audio, lyrics, and visual direction.
+                    - id: ecommerce-video
+                      object: workflow
+                      name: Ecommerce Video API
+                      description: Generate product ad videos from product images and a short creative brief.
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /v1/music-video/tasks:
+    post:
+      operationId: createMusicVideoTask
+      tags: [Music Video]
+      summary: Create a Music Video workflow task
+      security:
+        - BearerAuth: []
+      description: |
+        Music Video requires public HTTPS image URLs and a public HTTPS audio URL.
+        Prompt, language, quality, style, lip reference, subtitle, and format
+        controls are optional. BeatAPI detects the audio duration before task
+        creation and charges the detected billable duration at the selected
+        per-second customer-credit rate. If audio duration cannot be detected,
+        `duration` is used as the billing fallback.
+
+        Input limits:
+        - Images must contain 1-7 public HTTPS URLs.
+        - Use png, jpg, jpeg, or webp images; each image should be 50 MB or smaller.
+        - Image aspect ratio should be between 1:4 and 4:1.
+        - Audio must be a public HTTPS mp3, wav, aac, or m4a URL between 10 and 180 seconds.
+        - The audio file should be 50 MB or smaller.
+        - `prompt` is optional and must be at most 3000 characters.
+        - `lip_ref_url`, when provided, must be a public HTTPS image URL. Use a clear, front-facing close-up face reference for best lip-sync results.
+        - `srt_url`, when provided, must point to an `.srt` subtitle file.
+        - `duration` is only a billing fallback when BeatAPI cannot detect the audio length; it must be 10-180 seconds and cannot override a detected audio duration.
+
+        BeatAPI validates URL shape, text limits, enum values, combination
+        limits, and audio duration at task creation. Files uploaded through
+        `/v1/files` are also checked for type and size before they can be used.
+        Third-party media URLs must follow the same media requirements and may
+        be rejected during processing if invalid.
+
+        Customer pricing:
+        - MV 540p standard: 4 credits/s
+        - MV 720p standard: 5 credits/s
+        - MV 1080p standard: 6 credits/s
+        - lip_sync add-on: +2 credits/s
+        - MV 720p high: 16 credits/s
+        - MV 1080p high: 18 credits/s
+        - Ecommerce Video 1080p: 15 credits/s
+
+        Combination limits:
+        - `quality=high` is not supported with `resolution=540p`.
+        - `lip_sync=true` is not supported with `resolution=540p`.
+
+        It returns a task id immediately; poll the task or receive webhook
+        events for completion.
+
+        By default, Music Video responses return the final hosted video plus
+        storyboard shot ids and metadata. Shot videos are stored only when you
+        request a specific shot media URL or when a shot edit finishes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [images, audio_url]
+              properties:
+                images:
+                  type: array
+                  minItems: 1
+                  maxItems: 7
+                  description: 1-7 public HTTPS image URLs. Use png, jpg, jpeg, or webp images; each image should be 50 MB or smaller, with aspect ratio from 1:4 to 4:1. /v1/files uploads are checked before use; third-party URLs may be rejected during processing if invalid.
+                  items:
+                    type: string
+                    format: uri
+                audio_url:
+                  type: string
+                  format: uri
+                  description: Public HTTPS audio URL. Use mp3, wav, aac, or m4a; file size should be 50 MB or smaller and duration must be 10-180 seconds.
+                prompt:
+                  type: string
+                  maxLength: 3000
+                  description: Optional creative prompt, at most 3000 characters.
+                language:
+                  type: string
+                  enum: [en, zh]
+                lip_sync:
+                  type: boolean
+                lip_ref_url:
+                  type: string
+                  format: uri
+                  description: Public HTTPS image URL for lip-sync face reference. Use a clear, front-facing close-up face reference.
+                style:
+                  type: string
+                  maxLength: 200
+                  description: Optional style phrase, at most 200 characters.
+                quality:
+                  type: string
+                  enum: [standard, high]
+                  default: standard
+                aspect_ratio:
+                  type: string
+                  enum: ['1:1', '16:9', '9:16', '4:3', '3:4']
+                resolution:
+                  type: string
+                  enum: [540p, 720p, 1080p]
+                  default: 720p
+                add_subtitle:
+                  type: boolean
+                subtitle_color:
+                  type: string
+                  pattern: '^#[0-9A-Fa-f]{6}$'
+                  example: '#FFFFFF'
+                srt_url:
+                  type: string
+                  format: uri
+                duration:
+                  type: integer
+                  minimum: 10
+                  maximum: 180
+                  description: Billing fallback when audio duration cannot be detected. It must be 10-180 seconds and cannot override a detected audio duration.
+                compose_mode:
+                  type: string
+                  enum: [auto, manual]
+                  default: auto
+            example:
+              images:
+                - https://media.beatapi.io/samples/neon-singer.png
+              audio_url: https://media.beatapi.io/samples/neon-singer-preview.mp3
+              prompt: Neon rooftop performance with metro cutaways and cinematic light trails.
+              language: en
+              quality: standard
+              resolution: 720p
+              compose_mode: auto
+      responses:
+        '201':
+          description: Task accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+              example:
+                data:
+                  id: task_8K2qA
+                  object: task
+                  workflow: music-video
+                  status: queued
+                  stage: queued
+                  storyboard:
+                    shots: []
+                  created_at: 1782210000
+                  updated_at: 1782210000
+                  completed_at: null
+                  output: null
+                  usage:
+                    credits_reserved: 75
+                    credits_charged: 75
+                    billable_duration_seconds: 15
+                    credits_settled: 0
+                    credits_refunded: 0
+                  request_id: req_abc123
+                  error_code: null
+                  error_message: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          description: Account balance is not sufficient for this task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: insufficient_credits
+                  message: Account balance is not sufficient for this task.
+                  request_id: req_xxx
+        '429':
+          description: User concurrency exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: user_concurrency_exceeded
+                  message: You have reached the active processing task limit of 5. Wait for a processing task to finish before creating another one.
+                  request_id: req_xxx
+
+  /v1/music-video/tasks/{task_id}/shots/{shot_id}/edit:
+    post:
+      operationId: editMusicVideoShot
+      tags: [Music Video]
+      summary: Edit a Music Video storyboard shot
+      security:
+        - BearerAuth: []
+      description: |
+        Edit one storyboard shot using its BeatAPI `shot_id`. This operation
+        charges BeatAPI customer credits using the selected quality/resolution
+        rate and the shot duration. Default shot duration is 5 seconds.
+        When the edit finishes, BeatAPI stores the edited shot media and exposes
+        it on that shot. The existing final Music Video is not replaced until
+        you call compose with the selected shot ids.
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: string
+          example: task_8K2qA
+        - in: path
+          name: shot_id
+          required: true
+          schema:
+            type: string
+          example: shot_xxx
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+                  maxLength: 3000
+                duration:
+                  type: integer
+                  minimum: 1
+                  maximum: 180
+                  default: 5
+                quality:
+                  type: string
+                  enum: [standard, high]
+                  default: standard
+                resolution:
+                  type: string
+                  enum: [540p, 720p, 1080p]
+                  default: 720p
+            example:
+              prompt: Night city chorus with brighter face lighting.
+              duration: 5
+              quality: standard
+              resolution: 720p
+      responses:
+        '202':
+          description: Shot edit accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Task or shot not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/music-video/tasks/{task_id}/shots/{shot_id}/media:
+    post:
+      operationId: getMusicVideoShotMedia
+      tags: [Music Video]
+      summary: Retrieve a Music Video storyboard shot media URL
+      security:
+        - BearerAuth: []
+      description: |
+        Materialize one storyboard shot video using its BeatAPI `shot_id`.
+        If the shot has not been stored yet, BeatAPI retrieves the current shot
+        video, stores it under BeatAPI media storage, and returns a BeatAPI media
+        URL. Repeated calls return the stored URL when available.
+
+        This endpoint does not edit the shot and does not compose a new final
+        Music Video.
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: string
+          example: task_8K2qA
+        - in: path
+          name: shot_id
+          required: true
+          schema:
+            type: string
+          example: shot_xxx
+      responses:
+        '200':
+          description: Shot media URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ShotMedia'
+              example:
+                data:
+                  object: shot_media
+                  task_id: task_8K2qA
+                  shot_id: shot_xxx
+                  index: 0
+                  status: succeeded
+                  media:
+                    type: video
+                    url: https://media.beatapi.io/outputs/task_8K2qA/shots/shot_xxx/current.mp4
+                    mime_type: video/mp4
+                  created_at: 1782210000
+                  updated_at: 1782210300
+                  request_id: req_abc123
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Task or shot not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/music-video/tasks/{task_id}/compose:
+    post:
+      operationId: composeMusicVideoTask
+      tags: [Music Video]
+      summary: Compose a Music Video task from selected shots
+      security:
+        - BearerAuth: []
+      description: |
+        Compose selected BeatAPI storyboard shots into the final Music Video.
+        This operation charges a fixed 1 BeatAPI customer credit.
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: string
+          example: task_8K2qA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shot_ids]
+              properties:
+                shot_ids:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+            example:
+              shot_ids: [shot_xxx, shot_yyy]
+      responses:
+        '202':
+          description: Compose accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Task or shot not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/ecommerce-video/tasks:
+    post:
+      operationId: createEcommerceVideoTask
+      tags: [Ecommerce Video]
+      summary: Create an Ecommerce Video workflow task
+      security:
+        - BearerAuth: []
+      description: Ecommerce Video requires product images and an explicit output duration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [images, duration]
+              properties:
+                images:
+                  type: array
+                  minItems: 1
+                  maxItems: 7
+                  items:
+                    type: string
+                    format: uri
+                duration:
+                  type: integer
+                  minimum: 10
+                  maximum: 60
+                prompt:
+                  type: string
+                  maxLength: 2000
+                aspect_ratio:
+                  type: string
+                  enum: ['16:9', '9:16', '1:1']
+                language:
+                  type: string
+                  enum: [en, zh]
+            example:
+              images:
+                - https://media.beatapi.io/samples/smart-bottle.png
+              duration: 15
+              prompt: Fast product launch ad for paid social.
+              aspect_ratio: 9:16
+      responses:
+        '201':
+          description: Task accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+              example:
+                data:
+                  id: task_p9Lm2
+                  object: task
+                  workflow: ecommerce-video
+                  status: queued
+                  stage: queued
+                  created_at: 1782210000
+                  updated_at: 1782210000
+                  completed_at: null
+                  output: null
+                  usage:
+                    credits_reserved: 225
+                    credits_charged: 225
+                    billable_duration_seconds: 15
+                    credits_settled: 0
+                    credits_refunded: 0
+                  request_id: req_def456
+                  error_code: null
+                  error_message: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          description: Account balance is not sufficient for this task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: insufficient_credits
+                  message: Account balance is not sufficient for this task.
+                  request_id: req_xxx
+        '429':
+          description: User concurrency exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: user_concurrency_exceeded
+                  message: You have reached the active processing task limit of 5. Wait for a processing task to finish before creating another one.
+                  request_id: req_xxx
+
+  /v1/tasks/{task_id}:
+    get:
+      operationId: getTask
+      tags: [Tasks]
+      summary: Poll task status
+      security:
+        - BearerAuth: []
+      description: Poll every 5-10 seconds. This endpoint allows up to 120 requests per minute per API key.
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: string
+          example: task_8K2qA
+      responses:
+        '200':
+          description: Task status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+              examples:
+                queued:
+                  summary: Accepted and waiting
+                  value:
+                    data:
+                      id: task_8K2qA
+                      object: task
+                      workflow: music-video
+                      status: queued
+                      stage: queued
+                      storyboard:
+                        shots: []
+                      created_at: 1782210000
+                      updated_at: 1782210000
+                      completed_at: null
+                      output: null
+                      usage:
+                        credits_reserved: 75
+                        credits_charged: 75
+                        billable_duration_seconds: 15
+                        credits_settled: 0
+                        credits_refunded: 0
+                      request_id: req_abc123
+                      error_code: null
+                      error_message: null
+                succeeded:
+                  summary: Storyboard ready with shot metadata
+                  value:
+                    data:
+                      id: task_8K2qA
+                      object: task
+                      workflow: music-video
+                      status: storyboard_ready
+                      stage: storyboard_ready
+                      created_at: 1782210000
+                      updated_at: 1782210300
+                      completed_at: null
+                      storyboard:
+                        shots:
+                          - id: shot_xxx
+                            index: 0
+                            status: succeeded
+                            duration_seconds: 5
+                            prompt: Opening lyric shot.
+                            lyric_text: Intro
+                            created_at: 1782210000
+                            updated_at: 1782210300
+                      output: null
+                      usage:
+                        credits_reserved: 75
+                        credits_charged: 75
+                        billable_duration_seconds: 15
+                        credits_settled: 75
+                        credits_refunded: 0
+                      request_id: req_abc123
+                      error_code: null
+                      error_message: null
+                failed:
+                  summary: Failed with refunded charge
+                  value:
+                    data:
+                      id: task_8K2qA
+                      object: task
+                      workflow: music-video
+                      status: failed
+                      stage: failed
+                      storyboard:
+                        shots: []
+                      created_at: 1782210000
+                      updated_at: 1782210600
+                      completed_at: 1782210600
+                      output: null
+                      usage:
+                        credits_reserved: 75
+                        credits_charged: 75
+                        billable_duration_seconds: 15
+                        credits_settled: 0
+                        credits_refunded: 75
+                      request_id: req_abc123
+                      error_code: processing_timeout
+                      error_message: Task waited too long for platform capacity.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Task not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /v1/usage:
+    get:
+      operationId: getUsage
+      tags: [Usage]
+      summary: Get account usage and concurrency
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Usage summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResponse'
+              example:
+                data:
+                  object: usage
+                  credit_balance: 1080
+                  total_tasks: 12
+                  credits_settled: 720
+                  credits_refunded: 450
+                  concurrency:
+                    limit: 2
+                    active: 1
+                  by_workflow:
+                    - workflow: music-video
+                      tasks: 8
+                      credits_settled: 480
+                    - workflow: ecommerce-video
+                      tasks: 4
+                      credits_settled: 240
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/files:
+    post:
+      operationId: uploadFile
+      tags: [Files]
+      summary: Upload a file for workflow inputs
+      security:
+        - BearerAuth: []
+      description: |
+        Use file upload when your images, audio, or subtitle files are not
+        already hosted at public HTTPS URLs. The returned HTTPS URL can be used
+        directly in `images`, `audio_url`, or `srt_url`.
+
+        Limits:
+        - Maximum file size is 50 MB.
+        - Images: `png`, `jpg`, `jpeg`, `webp`
+          (`image/png`, `image/jpeg`, `image/webp`).
+        - Audio: `mp3`, `wav`, `aac`, `m4a`
+          (`audio/mpeg`, `audio/wav`, `audio/aac`, `audio/mp4`).
+        - Audio uploads must be 10-180 seconds.
+        - Subtitles: `srt` (`application/x-subrip`; multipart uploads may use
+          `text/plain` only when the filename ends in `.srt`).
+        - PDF, generic text files, octet-stream uploads, videos, and zip files
+          are not supported for launch.
+        - Send either multipart form-data with a `file` field, or send the raw
+          file body with the asset `Content-Type`.
+        - Returned URLs are HTTPS and long-lived for launch.
+        - Uploaded audio files are duration-checked during upload. The response
+          includes `audio_duration_seconds` when the uploaded asset is audio.
+        - Workflow task inputs still require public HTTPS URLs. Localhost,
+          private network URLs, and data URLs are not accepted.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                purpose:
+                  type: string
+                  enum: [input]
+      responses:
+        '201':
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResponse'
+              example:
+                data:
+                  id: file_3xYz9
+                  object: file
+                  url: https://media.beatapi.io/inputs/file_3xYz9.mp3
+                  key: inputs/file_3xYz9.mp3
+                  mime_type: audio/mpeg
+                  size_bytes: 1048576
+                  purpose: input
+                  audio_duration_seconds: 64.02
+                  audio_duration_source: mp3_frame_scan
+                  created_at: 1782210000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/webhooks:
+    get:
+      operationId: listWebhookEndpoints
+      tags: [Webhooks]
+      summary: List webhook endpoints
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Webhook endpoint list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointListResponse'
+              example:
+                data:
+                  object: list
+                  data:
+                    - id: wh_9aBcD
+                      object: webhook_endpoint
+                      url: https://example.com/beatapi-webhook
+                      description: Production webhook
+                      events: [task.succeeded, task.failed]
+                      status: active
+                      secret: whsec_example_masked
+                      created_at: 1782210000
+                      updated_at: 1782210000
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createWebhookEndpoint
+      tags: [Webhooks]
+      summary: Create a webhook endpoint
+      security:
+        - BearerAuth: []
+      description: |
+        The signing secret is returned only once at creation time. Store it
+        securely. Later responses return a masked secret.
+
+        BeatAPI sends these headers with each delivery:
+        - `x-beatapi-event`: `task.succeeded` or `task.failed`
+        - `x-beatapi-timestamp`: Unix timestamp in seconds
+        - `x-beatapi-signature`: hex HMAC-SHA256 signature
+
+        Verify the signature by computing:
+        `hmac_sha256(secret, timestamp + "." + raw_request_body)`.
+
+        Example delivery body:
+
+        ```json
+        {
+          "id": "evt_123",
+          "event": "task.succeeded",
+          "created_at": 1782210300,
+          "data": {
+            "id": "task_8K2qA",
+            "object": "task",
+            "workflow": "music-video",
+            "status": "succeeded",
+            "stage": "succeeded",
+            "storyboard": {
+              "shots": [
+                {
+                  "id": "shot_xxx",
+                  "index": 0,
+                  "status": "succeeded",
+                  "duration_seconds": 5,
+                  "prompt": "Opening lyric shot.",
+                  "lyric_text": "Intro",
+                  "created_at": 1782210000,
+                  "updated_at": 1782210300
+                }
+              ]
+            },
+            "created_at": 1782210000,
+            "updated_at": 1782210300,
+            "completed_at": 1782210300,
+            "output": {
+              "media": [
+                {
+                  "type": "video",
+                  "url": "https://media.beatapi.io/outputs/task_8K2qA/0.mp4",
+                  "mime_type": "video/mp4"
+                }
+              ]
+            },
+            "usage": {
+              "credits_reserved": 76,
+              "credits_charged": 76,
+              "billable_duration_seconds": 15,
+              "credits_settled": 76,
+              "credits_refunded": 0
+            },
+            "request_id": "req_abc123",
+            "error_code": null,
+            "error_message": null
+          }
+        }
+        ```
+
+        Reject old timestamps to prevent replay attacks. A 5 minute window is
+        recommended. Failed deliveries are retried at most 3 times with fixed
+        backoff windows of 1 minute, 5 minutes, and 15 minutes. Polling
+        `GET /v1/tasks/{task_id}` remains the source of truth.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                description:
+                  type: string
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [task.succeeded, task.failed]
+            example:
+              url: https://example.com/beatapi-webhook
+              events: [task.succeeded, task.failed]
+      responses:
+        '201':
+          description: Webhook endpoint created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointResponse'
+              example:
+                data:
+                  id: wh_9aBcD
+                  object: webhook_endpoint
+                  url: https://example.com/beatapi-webhook
+                  description: Production webhook
+                  events: [task.succeeded, task.failed]
+                  status: active
+                  secret: whsec_example_store_this_once
+                  created_at: 1782210000
+                  updated_at: 1782210000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/webhooks/{id}:
+    get:
+      operationId: getWebhookEndpoint
+      tags: [Webhooks]
+      summary: Get a webhook endpoint
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          example: wh_9aBcD
+      responses:
+        '200':
+          description: Webhook endpoint
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointResponse'
+              example:
+                data:
+                  id: wh_9aBcD
+                  object: webhook_endpoint
+                  url: https://example.com/beatapi-webhook
+                  description: Production webhook
+                  events: [task.succeeded, task.failed]
+                  status: active
+                  secret: whsec_example_masked
+                  created_at: 1782210000
+                  updated_at: 1782210000
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Webhook endpoint not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      operationId: updateWebhookEndpoint
+      tags: [Webhooks]
+      summary: Update a webhook endpoint
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          example: wh_9aBcD
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                description:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, disabled]
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [task.succeeded, task.failed]
+            example:
+              status: disabled
+      responses:
+        '200':
+          description: Webhook endpoint updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpointResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      operationId: deleteWebhookEndpoint
+      tags: [Webhooks]
+      summary: Delete a webhook endpoint
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          example: wh_9aBcD
+      responses:
+        '200':
+          description: Webhook endpoint deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+              example:
+                data:
+                  id: wh_9aBcD
+                  deleted: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'

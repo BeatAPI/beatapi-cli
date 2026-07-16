@@ -1,0 +1,21 @@
+{
+  "name": "@beatapi/cli",
+  "version": "0.1.0",
+  "description": "Command-line client for BeatAPI AI video workflows",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "beatapi": "./bin/beatapi.mjs"
+  },
+  "scripts": {
+    "contract:sync": "node scripts/contract.mjs --write",
+    "contract:check": "node scripts/contract.mjs --check",
+    "check": "node --check bin/beatapi.mjs && node --check src/cli.mjs && node --check src/client.mjs",
+    "test": "node --test",
+    "verify": "npm run contract:check && npm run check && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
