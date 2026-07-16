@@ -92,6 +92,11 @@ beatapi webhooks delete WEBHOOK
 Use `beatapi --help` for the installed command summary. `--json` remains an
 alias for `--file` on JSON-input commands.
 
+Webhook creation stores the one-time signing secret in the user's BeatAPI
+configuration directory with file mode `0600`. The JSON result contains
+`secret_file` instead of the secret itself. Set `BEATAPI_CONFIG_DIR` when a
+container or automation environment needs a custom secure location.
+
 ## TypeScript client
 
 ```bash
@@ -131,8 +136,9 @@ The client exposes every launch-contract operation: workflows, usage, file
 upload, music-video automatic and manual composition, ecommerce-video tasks,
 task polling, and webhook CRUD.
 
-Retries are bounded and opt-in through method retry options. The client
-preserves BeatAPI error code, HTTP status, request ID, details, and
+Retries are bounded and opt-in through method retry options. Task waiting uses
+bounded retries for transient network and retryable server failures. The client
+preserves BeatAPI error code, HTTP status, request ID, details, and honors
 `Retry-After` information.
 
 ## Security model
@@ -174,7 +180,8 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) before changing behavior.
 
 GitHub Actions verifies every pull request. Publishing is triggered by a GitHub
 release or manually through the release workflow after the repository
-environment contains an `NPM_TOKEN` secret.
+environment contains an `NPM_TOKEN` secret. The workflow skips package
+versions that already exist, so a partial release can be rerun safely.
 
 Release steps and ownership prerequisites are documented in
 [`docs/releasing.md`](./docs/releasing.md).

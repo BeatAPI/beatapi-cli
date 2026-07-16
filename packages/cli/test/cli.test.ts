@@ -1,4 +1,14 @@
 import assert from "node:assert/strict";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import test from "node:test";
 
 import { run } from "../src/cli.js";
@@ -171,4 +181,85 @@ test("supports music-video manual workflow and webhook commands", async () => {
   );
 
   assert.deepEqual(calls, ["edit", "media", "compose", "webhooks-list"]);
+});
+
+test("webhook creation stores the one-time secret instead of printing it", async () => {
+  const output = outputCollector();
+  const directory = await mkdtemp(resolve(tmpdir(), "beatapi-cli-webhook-"));
+  const inputPath = resolve(directory, "webhook.json");
+  await writeFile(
+    inputPath,
+    JSON.stringify({ url: "https://example.com/webhooks/beatapi" }),
+  );
+
+  try {
+    const exitCode = await run(
+      ["webhooks", "create", "--file", inputPath],
+      {
+        ...output.io,
+        apiKey: "sk_test",
+        env: { BEATAPI_CONFIG_DIR: directory },
+        createClient: () => ({
+          createWebhook: async () => ({
+            id: "wh_test",
+            url: "https://example.com/webhooks/beatapi",
+            secret: "whsec_one_time_secret",
+          }),
+          deleteWebhook: async () => ({ deleted: true }),
+        }),
+      },
+    );
+
+    assert.equal(exitCode, 0);
+    assert.doesNotMatch(output.stdout(), /whsec_one_time_secret/);
+    const result = JSON.parse(output.stdout()) as {
+      secret_file: string;
+    };
+    assert.equal(
+      (await readFile(result.secret_file, "utf8")).trim(),
+      "whsec_one_time_secret",
+    );
+    assert.equal((await stat(result.secret_file)).mode & 0o777, 0o600);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("webhook creation rolls back when secure secret storage fails", async () => {
+  const output = outputCollector();
+  const directory = await mkdtemp(resolve(tmpdir(), "beatapi-cli-webhook-"));
+  const inputPath = resolve(directory, "webhook.json");
+  const secretsDirectory = resolve(directory, "secrets");
+  await writeFile(
+    inputPath,
+    JSON.stringify({ url: "https://example.com/webhooks/beatapi" }),
+  );
+  await mkdir(secretsDirectory, { recursive: true });
+  await writeFile(resolve(secretsDirectory, "wh_test.secret"), "existing\n");
+  let deletedWebhookId = "";
+
+  try {
+    await assert.rejects(
+      run(["webhooks", "create", "--file", inputPath], {
+        ...output.io,
+        apiKey: "sk_test",
+        env: { BEATAPI_CONFIG_DIR: directory },
+        createClient: () => ({
+          createWebhook: async () => ({
+            id: "wh_test",
+            url: "https://example.com/webhooks/beatapi",
+            secret: "whsec_one_time_secret",
+          }),
+          deleteWebhook: async (id: string) => {
+            deletedWebhookId = id;
+            return { deleted: true };
+          },
+        }),
+      }),
+      /rolled back/,
+    );
+    assert.equal(deletedWebhookId, "wh_test");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

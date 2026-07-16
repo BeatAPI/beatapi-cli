@@ -13,6 +13,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     environment: npm
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,9 +24,5 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run verify
-      - run: npm publish --workspace beatapi-client
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: npm publish --workspace beatapi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: node scripts/publish-workspace-if-needed.mjs beatapi-client
+      - run: node scripts/publish-workspace-if-needed.mjs beatapi

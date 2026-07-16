@@ -20,5 +20,8 @@ beatapi tasks wait task_123 --interval 7000
 Results are JSON on stdout. Progress and errors use stderr so the CLI composes
 cleanly with shell scripts and automation tools.
 
+Webhook creation writes the one-time signing secret to a mode-`0600` file and
+returns its path as `secret_file`; it does not print the secret.
+
 See the [repository](https://github.com/erickkkyt/beatapi-cli) for the complete
 command reference and security model.

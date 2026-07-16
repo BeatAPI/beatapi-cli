@@ -16,6 +16,7 @@ import {
   type CredentialStore,
 } from "./credentials.js";
 import { promptSecret as defaultPromptSecret } from "./prompt.js";
+import { persistWebhookSecret } from "./webhook-secrets.js";
 
 export const VERSION = "0.1.0";
 
@@ -382,7 +383,23 @@ export async function run(
   }
   if (resource === "webhooks" && action === "create") {
     const input = await readJson<CreateWebhookInput>(inputFile(args));
-    printJson(await client.createWebhook(input), stdout);
+    const endpoint = (await client.createWebhook(input)) as Record<
+      string,
+      unknown
+    >;
+    try {
+      printJson(await persistWebhookSecret(endpoint, env), stdout);
+    } catch (error) {
+      const endpointId =
+        typeof endpoint.id === "string" ? endpoint.id : undefined;
+      if (endpointId) {
+        await client.deleteWebhook(endpointId).catch(() => undefined);
+      }
+      throw new Error(
+        "Unable to store the one-time webhook secret; the webhook was rolled back.",
+        { cause: error },
+      );
+    }
     return 0;
   }
   if (resource === "webhooks" && action === "get") {

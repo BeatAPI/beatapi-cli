@@ -23,6 +23,8 @@ release.
 6. Merge to `main` only after CI passes.
 7. Create a GitHub release tagged `vX.Y.Z`.
 8. Approve the protected `npm` environment deployment.
+   The workflow checks each exact package version before publishing, so it is
+   safe to rerun after one package succeeds and the other fails.
 9. Confirm both npm package pages and install the CLI in a clean temporary
    directory.
 10. Run `beatapi --version`, `beatapi --help`, and an authenticated

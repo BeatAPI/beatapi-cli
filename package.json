@@ -15,7 +15,7 @@
     "build": "npm run generate:types && tsc -b",
     "clean": "tsc -b --clean",
     "typecheck": "tsc -b --pretty false",
-    "test": "tsx --test packages/*/test/*.test.ts",
+    "test": "tsx --test packages/*/test/*.test.ts test/*.test.mjs",
     "lint": "tsc -b --pretty false",
     "verify": "npm run contract:check && npm run check:generated && npm run clean && npm run typecheck && npm test && npm run build && npm run pack:check && npm run package:smoke",
     "pack:check": "npm pack --dry-run --workspace beatapi-client && npm pack --dry-run --workspace beatapi",

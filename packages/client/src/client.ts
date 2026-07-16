@@ -238,7 +238,7 @@ export class BeatAPIClient {
         const delay =
           serverDelay ??
           Math.round(exponentialDelay * (1 + this.random() * 0.2));
-        await this.sleep(Math.min(maxDelayMs, delay));
+        await this.sleep(delay);
       } catch (error) {
         if (error instanceof BeatAPIError) throw error;
         if (attempt >= maxAttempts) {
@@ -383,7 +383,9 @@ export class BeatAPIClient {
     assertPositiveInteger(maxAttempts, "maxAttempts");
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      const task = await this.getTask(taskId);
+      const task = await this.getTask(taskId, {
+        retry: { maxAttempts: 3 },
+      });
       options.onUpdate?.(task, attempt);
       if (ACTIONABLE_OR_TERMINAL_STATUSES.has(task.status)) return task;
 

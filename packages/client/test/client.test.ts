@@ -110,6 +110,39 @@ test("retries retryable server failures with bounded backoff", async () => {
   assert.deepEqual(delays, [100, 200]);
 });
 
+test("honors the full server Retry-After delay", async () => {
+  let attempts = 0;
+  const delays: number[] = [];
+  const client = new BeatAPIClient({
+    apiKey: "sk_test_value",
+    sleep: async (milliseconds) => {
+      delays.push(milliseconds);
+    },
+    fetch: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        return jsonResponse(
+          {
+            error: {
+              code: "rate_limit_exceeded",
+              message: "Wait before retrying.",
+              retry_after_seconds: 60,
+            },
+          },
+          { status: 429 },
+        );
+      }
+      return jsonResponse({ data: { id: "task_ok", status: "queued" } });
+    },
+  });
+
+  await client.getTask("task_ok", {
+    retry: { maxAttempts: 2, maxDelayMs: 10_000 },
+  });
+
+  assert.deepEqual(delays, [60_000]);
+});
+
 test("waitForTask stops on actionable manual storyboard states", async () => {
   const updates: string[] = [];
   const states: BeatAPITask[] = [
@@ -130,6 +163,33 @@ test("waitForTask stops on actionable manual storyboard states", async () => {
 
   assert.equal(task.status, "storyboard_ready");
   assert.deepEqual(updates, ["queued", "storyboard_ready"]);
+});
+
+test("waitForTask survives a transient network failure", async () => {
+  let requests = 0;
+  const client = new BeatAPIClient({
+    apiKey: "sk_test_value",
+    sleep: async () => undefined,
+    random: () => 0,
+    fetch: async () => {
+      requests += 1;
+      if (requests === 1) throw new Error("temporary network failure");
+      return jsonResponse({
+        data: {
+          id: "task_1",
+          status: requests === 2 ? "processing" : "succeeded",
+        },
+      });
+    },
+  });
+
+  const task = await client.waitForTask("task_1", {
+    intervalMs: 1,
+    maxAttempts: 2,
+  });
+
+  assert.equal(task.status, "succeeded");
+  assert.equal(requests, 3);
 });
 
 test("exposes the complete launch workflow methods", async () => {
@@ -175,4 +235,3 @@ test("exposes the complete launch workflow methods", async () => {
     { method: "DELETE", path: "/v1/webhooks/wh" },
   ]);
 });
-
