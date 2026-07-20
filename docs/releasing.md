@@ -6,8 +6,20 @@
 2. Log in to npm with the BeatAPI publishing account.
 3. Publish or reserve both package names: `beatapi-client` and `beatapi`.
 4. In GitHub, create an environment named `npm`.
-5. Add an environment secret named `NPM_TOKEN` with publish access to both
-   packages. Keep required reviewer protection enabled for production releases.
+5. Add the publishing owner as a required reviewer for the `npm` environment
+   and allow release tags matching `v*`.
+6. On npmjs.com, configure a GitHub Actions Trusted Publisher separately for
+   `beatapi-client` and `beatapi` with these exact values:
+   - organization: `BeatAPI`;
+   - repository: `beatapi-cli`;
+   - workflow filename: `release.yml`;
+   - environment: `npm`;
+   - allowed action: `npm publish`.
+
+The release workflow uses npm Trusted Publishing over OIDC. It intentionally
+does not store or reference a long-lived `NPM_TOKEN`. GitHub grants the workflow
+a short-lived identity for each approved release, and npm automatically records
+provenance for public packages published from the public repository.
 
 The package names were unregistered when this repository was prepared. npm
 names are first-come, first-served, so reserve them before announcing the
@@ -29,6 +41,11 @@ release.
    directory.
 10. Run `beatapi --version`, `beatapi --help`, and an authenticated
     `beatapi auth status` smoke test.
+
+The workflow installs the current npm CLI on Node.js 24 because Trusted
+Publishing requires npm 11.5.1 or newer and Node.js 22.14.0 or newer. Do not add
+an `NPM_TOKEN` fallback: a missing OIDC trust relationship should fail closed
+instead of silently using a persistent credential.
 
 ## Rollback
 

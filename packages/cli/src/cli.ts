@@ -18,7 +18,7 @@ import {
 import { promptSecret as defaultPromptSecret } from "./prompt.js";
 import { persistWebhookSecret } from "./webhook-secrets.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";
 
 const HELP = `BeatAPI CLI ${VERSION}
 

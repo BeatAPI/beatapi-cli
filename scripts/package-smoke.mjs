@@ -45,7 +45,7 @@ try {
       "utf8",
     ),
   );
-  if (installedPackage.version !== "0.1.0") {
+  if (installedPackage.version !== "0.1.1") {
     throw new Error("Installed CLI package version did not match the release.");
   }
 
