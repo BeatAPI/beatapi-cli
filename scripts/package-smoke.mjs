@@ -23,7 +23,13 @@ async function pack(workspace) {
     { cwd: root },
   );
   const result = JSON.parse(stdout);
-  return join(temporaryDirectory, result[0].filename);
+  const metadata = Array.isArray(result)
+    ? result[0]
+    : result[workspace] ?? Object.values(result)[0];
+  if (!metadata?.filename) {
+    throw new Error(`npm pack did not return metadata for ${workspace}.`);
+  }
+  return join(temporaryDirectory, metadata.filename);
 }
 
 try {
