@@ -4,7 +4,8 @@
 
 1. Use the public GitHub repository `BeatAPI/beatapi-cli`.
 2. Log in to npm with the BeatAPI publishing account.
-3. Publish or reserve both package names: `beatapi-client` and `beatapi`.
+3. Confirm the BeatAPI publishing account still owns both existing package
+   names: `beatapi-client` and `beatapi`.
 4. In GitHub, create an environment named `npm`.
 5. Add the publishing owner as a required reviewer for the `npm` environment
    and allow release tags matching `v*`.
@@ -21,9 +22,9 @@ does not store or reference a long-lived `NPM_TOKEN`. GitHub grants the workflow
 a short-lived identity for each approved release, and npm automatically records
 provenance for public packages published from the public repository.
 
-The package names were unregistered when this repository was prepared. npm
-names are first-come, first-served, so reserve them before announcing the
-release.
+Both package names are already published. Do not create overlapping Realtime
+package names for the same runtime or CLI surface; release Realtime session
+support through `beatapi-client` and `beatapi` together.
 
 ## Release checklist
 
