@@ -1,7 +1,7 @@
 {
   "name": "beatapi-client",
-  "version": "0.1.1",
-  "description": "Type-safe JavaScript and TypeScript client for the BeatAPI async video API.",
+  "version": "0.2.0",
+  "description": "Type-safe JavaScript and TypeScript client for BeatAPI async and realtime video APIs.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -42,6 +42,7 @@
     "ai-video",
     "music-video",
     "ecommerce-video",
+    "realtime-video",
     "typescript",
     "sdk"
   ],

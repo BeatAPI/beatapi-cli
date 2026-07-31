@@ -1,6 +1,7 @@
 # beatapi-client
 
-Official TypeScript client for the public BeatAPI asynchronous video API.
+Official TypeScript client for the public BeatAPI asynchronous and Realtime
+Video APIs.
 
 ```bash
 npm install beatapi-client
@@ -23,7 +24,18 @@ const result = await beatapi.waitForTask(task.id, {
   intervalMs: 7_000,
   onUpdate: (update) => console.error(update.status),
 });
+
+const session = await beatapi.createRealtimeSession(
+  {
+    max_duration_seconds: 60,
+    allowed_origins: ["https://app.example.com"],
+  },
+  { idempotencyKey: "rt_checkout_123" },
+);
 ```
+
+Create Realtime sessions on a trusted server. Send only the short-lived
+`session.client_secret` to the browser SDK; never expose the `sk_` API key.
 
 The exported request and response types are generated from the reviewed
 BeatAPI OpenAPI contract. The runtime client preserves structured API errors,

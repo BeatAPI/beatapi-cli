@@ -6,15 +6,20 @@ info:
     name: BeatAPI Terms of Service
     url: https://beatapi.io/terms-of-service
   description: |
-    BeatAPI is a simple async API for video workflows. Most integrations use the
-    same loop: create a task, poll the task until it finishes, then read the
-    hosted video URL from `output.media`.
+    BeatAPI provides async video workflows and short-lived Realtime Video
+    Sessions behind one BeatAPI-native API. Async integrations create a task,
+    poll until it finishes, then read the hosted video URL from `output.media`.
+    Realtime browser integrations create a Session with the same Bearer API key,
+    then pass only the returned BeatAPI `client_secret` to `@beatapi/realtime`.
 
     ## 5 minute Quick Start
 
     1. Set your base URL to `https://api.beatapi.io`.
-    2. Create an API key in Dashboard and send it as
+    2. Create an API key in [Dashboard → API Keys](https://beatapi.io/dashboard/apikeys)
+       and send it as
        `Authorization: Bearer <BEATAPI_API_KEY>`.
+       Credit packs are available from
+       [Dashboard → Billing](https://beatapi.io/dashboard/billing).
     3. Use public HTTPS URLs for input media. If your files are local, upload
        them with `POST /v1/files` first.
     4. Create a workflow task.
@@ -96,6 +101,8 @@ tags:
     description: Poll task status and read output URLs.
   - name: Usage
     description: Inspect task totals and account concurrency.
+  - name: Realtime Video
+    description: Create and manage short-lived BeatAPI browser sessions for live AI video effects.
   - name: Files
     description: Upload local assets and use the returned HTTPS URL as workflow input.
   - name: Webhooks
@@ -444,12 +451,73 @@ components:
                 type: integer
               credits_settled:
                 type: integer
+        realtime:
+          type: object
+          required: [sessions, credits, active]
+          properties:
+            sessions:
+              type: integer
+              description: Total BeatAPI realtime sessions for this account.
+            credits:
+              type: integer
+              description: Credits settled by connected realtime sessions.
+            active:
+              type: integer
+              description: Realtime sessions in ready, connecting, or active state.
     UsageResponse:
       type: object
       required: [data]
       properties:
         data:
           $ref: '#/components/schemas/Usage'
+    RealtimeSession:
+      type: object
+      required: [id, object, status, expires_at, max_duration_seconds, allowed_origins, credits, request_id, created_at, connected_at, closed_at]
+      properties:
+        id:
+          type: string
+          pattern: '^rts_'
+        object:
+          type: string
+          enum: [realtime.session]
+        status:
+          type: string
+          enum: [ready, connecting, active, closed, failed, expired]
+          description: Active means BeatAPI accepted the first billing heartbeat after remote output began.
+        client_secret:
+          type: string
+          description: Returned only by POST. Give this short-lived BeatAPI secret to the browser SDK; never give the browser an sk_ API key.
+          pattern: '^brt_live_'
+        expires_at:
+          type: string
+          format: date-time
+        max_duration_seconds:
+          type: integer
+          enum: [15, 60, 300]
+        allowed_origins:
+          type: array
+          items: { type: string, format: uri }
+        credits:
+          type: object
+          required: [reserved, settled, refunded]
+          properties:
+            reserved: { type: integer }
+            settled: { type: integer }
+            refunded: { type: integer }
+        request_id:
+          type: string
+        created_at: { type: string, format: date-time }
+        connected_at:
+          type: [string, 'null']
+          format: date-time
+          description: Time of the first accepted BeatAPI billing heartbeat; null before billing activation.
+        closed_at: { type: [string, 'null'], format: date-time }
+    RealtimeSessionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/RealtimeSession'
     FileResponse:
       type: object
       required: [data]
@@ -515,6 +583,12 @@ components:
                 - processing_timeout
                 - result_transfer_failed
                 - invalid_signature
+                - realtime_disabled
+                - realtime_capacity_unavailable
+                - realtime_session_expired
+                - origin_not_allowed
+                - invalid_client_secret
+                - transport_not_allowed
                 - internal_error
             message:
               type: string
@@ -522,7 +596,7 @@ components:
               type: string
             retry_after_seconds:
               type: integer
-              description: Present on rate_limit_exceeded responses when the client should wait before retrying.
+              description: Present on retryable rate-limit or capacity responses when the client should wait before retrying.
   responses:
     Unauthorized:
       description: Missing, invalid, or inactive API key.
@@ -568,6 +642,7 @@ paths:
     get:
       operationId: listWorkflows
       tags: [Workflows]
+      x-apidog-folder: Reference/API Overview
       summary: List launch workflows
       security: []
       responses:
@@ -596,7 +671,8 @@ paths:
     post:
       operationId: createMusicVideoTask
       tags: [Music Video]
-      summary: Create a Music Video workflow task
+      x-apidog-folder: Music Video API/Create Video
+      summary: Create Music Video
       security:
         - BearerAuth: []
       description: |
@@ -778,7 +854,8 @@ paths:
     post:
       operationId: editMusicVideoShot
       tags: [Music Video]
-      summary: Edit a Music Video storyboard shot
+      x-apidog-folder: Music Video API/Advanced Editing
+      summary: Edit Shot
       security:
         - BearerAuth: []
       description: |
@@ -852,7 +929,8 @@ paths:
     post:
       operationId: getMusicVideoShotMedia
       tags: [Music Video]
-      summary: Retrieve a Music Video storyboard shot media URL
+      x-apidog-folder: Music Video API/Advanced Editing
+      summary: Get Shot Media
       security:
         - BearerAuth: []
       description: |
@@ -916,7 +994,8 @@ paths:
     post:
       operationId: composeMusicVideoTask
       tags: [Music Video]
-      summary: Compose a Music Video task from selected shots
+      x-apidog-folder: Music Video API/Advanced Editing
+      summary: Compose Video
       security:
         - BearerAuth: []
       description: |
@@ -966,7 +1045,8 @@ paths:
     post:
       operationId: createEcommerceVideoTask
       tags: [Ecommerce Video]
-      summary: Create an Ecommerce Video workflow task
+      x-apidog-folder: Ecommerce Video API
+      summary: Create Ecommerce Video
       security:
         - BearerAuth: []
       description: Ecommerce Video requires product images and an explicit output duration.
@@ -1062,6 +1142,7 @@ paths:
     get:
       operationId: getTask
       tags: [Tasks]
+      x-apidog-folder: Reference/Task Status
       summary: Poll task status
       security:
         - BearerAuth: []
@@ -1172,10 +1253,119 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
 
+  /v1/realtime/sessions:
+    post:
+      operationId: createRealtimeSession
+      tags: [Realtime Video]
+      x-apidog-folder: Realtime Video API
+      summary: Create a realtime browser session
+      security:
+        - BearerAuth: []
+      description: |
+        Reserve credits and allocate a short-lived BeatAPI realtime session. Send a unique
+        `Idempotency-Key`; retries with the same user, key, and body return the same session
+        and deterministic short-lived `client_secret` without reserving credits or capacity
+        twice. The browser receives only that BeatAPI secret and connects with
+        `@beatapi/realtime`.
+
+        Billing is fixed by the selected maximum duration. The BeatAPI browser runtime sends its
+        first billing heartbeat only after the first remote output frame is rendered. When that
+        accepted BeatAPI billing heartbeat succeeds, the Session becomes `active` and the selected
+        duration is fully settled. A Session that closes or expires without an accepted billing
+        heartbeat is fully refunded. Billing activation comes from the trusted transport lifecycle,
+        not a caller-supplied browser event.
+        Production availability remains gated until the documented commercial and capacity launch
+        checks pass.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [max_duration_seconds, allowed_origins]
+              properties:
+                max_duration_seconds:
+                  type: integer
+                  enum: [15, 60, 300]
+                allowed_origins:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items: { type: string, format: uri }
+                metadata:
+                  type: object
+                  maxProperties: 20
+                  propertyNames: { maxLength: 64 }
+                  additionalProperties: { type: string, maxLength: 256 }
+            example:
+              max_duration_seconds: 60
+              allowed_origins: ["https://app.example.com"]
+              metadata: { customer_id: cus_123 }
+      responses:
+        '201':
+          description: Realtime session created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RealtimeSessionResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402':
+          description: Insufficient credits
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Idempotency conflict
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503':
+          description: Realtime is disabled or capacity is temporarily unavailable
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /v1/realtime/sessions/{session_id}:
+    parameters:
+      - in: path
+        name: session_id
+        required: true
+        schema: { type: string, pattern: '^rts_' }
+    get:
+      operationId: getRealtimeSession
+      tags: [Realtime Video]
+      x-apidog-folder: Realtime Video API
+      summary: Get a realtime session
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Realtime session
+          content: { application/json: { schema: { $ref: '#/components/schemas/RealtimeSessionResponse' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: Realtime session not found
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    delete:
+      operationId: closeRealtimeSession
+      tags: [Realtime Video]
+      x-apidog-folder: Realtime Video API
+      summary: Close a realtime session
+      security: [{ BearerAuth: [] }]
+      description: Idempotently closes the session, clears temporary credentials, and releases account capacity.
+      responses:
+        '200':
+          description: Realtime session closed
+          content: { application/json: { schema: { $ref: '#/components/schemas/RealtimeSessionResponse' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: Realtime session not found
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
   /v1/usage:
     get:
       operationId: getUsage
       tags: [Usage]
+      x-apidog-folder: Reference/Usage & Limits
       summary: Get account usage and concurrency
       security:
         - BearerAuth: []
@@ -1196,6 +1386,10 @@ paths:
                   concurrency:
                     limit: 2
                     active: 1
+                  realtime:
+                    sessions: 3
+                    credits: 90
+                    active: 1
                   by_workflow:
                     - workflow: music-video
                       tasks: 8
@@ -1210,6 +1404,7 @@ paths:
     post:
       operationId: uploadFile
       tags: [Files]
+      x-apidog-folder: Reference/Upload Files
       summary: Upload a file for workflow inputs
       security:
         - BearerAuth: []
@@ -1278,6 +1473,7 @@ paths:
     get:
       operationId: listWebhookEndpoints
       tags: [Webhooks]
+      x-apidog-folder: Reference/Webhooks
       summary: List webhook endpoints
       security:
         - BearerAuth: []
@@ -1306,6 +1502,7 @@ paths:
     post:
       operationId: createWebhookEndpoint
       tags: [Webhooks]
+      x-apidog-folder: Reference/Webhooks
       summary: Create a webhook endpoint
       security:
         - BearerAuth: []
@@ -1426,6 +1623,7 @@ paths:
     get:
       operationId: getWebhookEndpoint
       tags: [Webhooks]
+      x-apidog-folder: Reference/Webhooks
       summary: Get a webhook endpoint
       security:
         - BearerAuth: []
@@ -1465,6 +1663,7 @@ paths:
     patch:
       operationId: updateWebhookEndpoint
       tags: [Webhooks]
+      x-apidog-folder: Reference/Webhooks
       summary: Update a webhook endpoint
       security:
         - BearerAuth: []
@@ -1511,6 +1710,7 @@ paths:
     delete:
       operationId: deleteWebhookEndpoint
       tags: [Webhooks]
+      x-apidog-folder: Reference/Webhooks
       summary: Delete a webhook endpoint
       security:
         - BearerAuth: []

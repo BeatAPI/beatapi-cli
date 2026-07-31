@@ -183,6 +183,103 @@ test("supports music-video manual workflow and webhook commands", async () => {
   assert.deepEqual(calls, ["edit", "media", "compose", "webhooks-list"]);
 });
 
+test("supports realtime session create, get, and close commands", async () => {
+  const output = outputCollector();
+  const calls: unknown[] = [];
+  const client = {
+    createRealtimeSession: async (input: unknown, options: unknown) => {
+      calls.push(["create", input, options]);
+      return { id: "brt_test", status: "ready" };
+    },
+    getRealtimeSession: async (id: string) => {
+      calls.push(["get", id]);
+      return { id, status: "active" };
+    },
+    closeRealtimeSession: async (id: string) => {
+      calls.push(["close", id]);
+      return { id, status: "closed" };
+    },
+  };
+
+  assert.equal(
+    await run(
+      [
+        "realtime",
+        "sessions",
+        "create",
+        "--duration",
+        "60",
+        "--origin",
+        "https://app.example.com",
+        "--origin",
+        "https://preview.example.com",
+        "--metadata",
+        "customer_id=cus_123",
+        "--idempotency-key",
+        "rt_cli_test",
+      ],
+      { ...output.io, apiKey: "sk_test", createClient: () => client },
+    ),
+    0,
+  );
+  assert.equal(
+    await run(["realtime", "sessions", "get", "brt_test"], {
+      ...output.io,
+      apiKey: "sk_test",
+      createClient: () => client,
+    }),
+    0,
+  );
+  assert.equal(
+    await run(["realtime", "sessions", "close", "brt_test"], {
+      ...output.io,
+      apiKey: "sk_test",
+      createClient: () => client,
+    }),
+    0,
+  );
+
+  assert.deepEqual(calls, [
+    [
+      "create",
+      {
+        max_duration_seconds: 60,
+        allowed_origins: [
+          "https://app.example.com",
+          "https://preview.example.com",
+        ],
+        metadata: { customer_id: "cus_123" },
+      },
+      { idempotencyKey: "rt_cli_test" },
+    ],
+    ["get", "brt_test"],
+    ["close", "brt_test"],
+  ]);
+});
+
+test("validates realtime session duration and origins", async () => {
+  const output = outputCollector();
+  await assert.rejects(
+    run(
+      [
+        "realtime",
+        "sessions",
+        "create",
+        "--duration",
+        "45",
+        "--origin",
+        "https://app.example.com",
+      ],
+      {
+        ...output.io,
+        apiKey: "sk_test",
+        createClient: () => ({ createRealtimeSession: async () => ({}) }),
+      },
+    ),
+    /15, 60, or 300/,
+  );
+});
+
 test("webhook creation stores the one-time secret instead of printing it", async () => {
   const output = outputCollector();
   const directory = await mkdtemp(resolve(tmpdir(), "beatapi-cli-webhook-"));

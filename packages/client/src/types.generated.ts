@@ -31,7 +31,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create a Music Video workflow task
+         * Create Music Video
          * @description Music Video requires public HTTPS image URLs and a public HTTPS audio URL.
          *     Prompt, language, quality, style, lip reference, subtitle, and format
          *     controls are optional. BeatAPI detects the audio duration before task
@@ -93,7 +93,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Edit a Music Video storyboard shot
+         * Edit Shot
          * @description Edit one storyboard shot using its BeatAPI `shot_id`. This operation
          *     charges BeatAPI customer credits using the selected quality/resolution
          *     rate and the shot duration. Default shot duration is 5 seconds.
@@ -118,7 +118,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Retrieve a Music Video storyboard shot media URL
+         * Get Shot Media
          * @description Materialize one storyboard shot video using its BeatAPI `shot_id`.
          *     If the shot has not been stored yet, BeatAPI retrieves the current shot
          *     video, stores it under BeatAPI media storage, and returns a BeatAPI media
@@ -144,7 +144,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Compose a Music Video task from selected shots
+         * Compose Video
          * @description Compose selected BeatAPI storyboard shots into the final Music Video.
          *     This operation charges a fixed 1 BeatAPI customer credit.
          */
@@ -165,7 +165,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create an Ecommerce Video workflow task
+         * Create Ecommerce Video
          * @description Ecommerce Video requires product images and an explicit output duration.
          */
         post: operations["createEcommerceVideoTask"];
@@ -190,6 +190,62 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/realtime/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a realtime browser session
+         * @description Reserve credits and allocate a short-lived BeatAPI realtime session. Send a unique
+         *     `Idempotency-Key`; retries with the same user, key, and body return the same session
+         *     and deterministic short-lived `client_secret` without reserving credits or capacity
+         *     twice. The browser receives only that BeatAPI secret and connects with
+         *     `@beatapi/realtime`.
+         *
+         *     Billing is fixed by the selected maximum duration. The BeatAPI browser runtime sends its
+         *     first billing heartbeat only after the first remote output frame is rendered. When that
+         *     accepted BeatAPI billing heartbeat succeeds, the Session becomes `active` and the selected
+         *     duration is fully settled. A Session that closes or expires without an accepted billing
+         *     heartbeat is fully refunded. Billing activation comes from the trusted transport lifecycle,
+         *     not a caller-supplied browser event.
+         *     Production availability remains gated until the documented commercial and capacity launch
+         *     checks pass.
+         */
+        post: operations["createRealtimeSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/realtime/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        /** Get a realtime session */
+        get: operations["getRealtimeSession"];
+        put?: never;
+        post?: never;
+        /**
+         * Close a realtime session
+         * @description Idempotently closes the session, clears temporary credentials, and releases account capacity.
+         */
+        delete: operations["closeRealtimeSession"];
         options?: never;
         head?: never;
         patch?: never;
@@ -582,9 +638,52 @@ export interface components {
                 tasks: number;
                 credits_settled: number;
             }[];
+            realtime?: {
+                /** @description Total BeatAPI realtime sessions for this account. */
+                sessions: number;
+                /** @description Credits settled by connected realtime sessions. */
+                credits: number;
+                /** @description Realtime sessions in ready, connecting, or active state. */
+                active: number;
+            };
         };
         UsageResponse: {
             data: components["schemas"]["Usage"];
+        };
+        RealtimeSession: {
+            id: string;
+            /** @enum {string} */
+            object: "realtime.session";
+            /**
+             * @description Active means BeatAPI accepted the first billing heartbeat after remote output began.
+             * @enum {string}
+             */
+            status: "ready" | "connecting" | "active" | "closed" | "failed" | "expired";
+            /** @description Returned only by POST. Give this short-lived BeatAPI secret to the browser SDK; never give the browser an sk_ API key. */
+            client_secret?: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** @enum {integer} */
+            max_duration_seconds: 15 | 60 | 300;
+            allowed_origins: string[];
+            credits: {
+                reserved: number;
+                settled: number;
+                refunded: number;
+            };
+            request_id: string;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description Time of the first accepted BeatAPI billing heartbeat; null before billing activation.
+             */
+            connected_at: string | null;
+            /** Format: date-time */
+            closed_at: string | null;
+        };
+        RealtimeSessionResponse: {
+            data: components["schemas"]["RealtimeSession"];
         };
         FileResponse: {
             data: components["schemas"]["File"];
@@ -609,10 +708,10 @@ export interface components {
         Error: {
             error: {
                 /** @enum {string} */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "insufficient_credits" | "idempotency_conflict" | "user_concurrency_exceeded" | "rate_limit_exceeded" | "processing_unavailable" | "processing_failed" | "processing_timeout" | "result_transfer_failed" | "invalid_signature" | "internal_error";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "insufficient_credits" | "idempotency_conflict" | "user_concurrency_exceeded" | "rate_limit_exceeded" | "processing_unavailable" | "processing_failed" | "processing_timeout" | "result_transfer_failed" | "invalid_signature" | "realtime_disabled" | "realtime_capacity_unavailable" | "realtime_session_expired" | "origin_not_allowed" | "invalid_client_secret" | "transport_not_allowed" | "internal_error";
                 message: string;
                 request_id: string;
-                /** @description Present on rate_limit_exceeded responses when the client should wait before retrying. */
+                /** @description Present on retryable rate-limit or capacity responses when the client should wait before retrying. */
                 retry_after_seconds?: number;
             };
         };
@@ -1178,6 +1277,144 @@ export interface operations {
             429: components["responses"]["RateLimited"];
         };
     };
+    createRealtimeSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "max_duration_seconds": 60,
+                 *       "allowed_origins": [
+                 *         "https://app.example.com"
+                 *       ],
+                 *       "metadata": {
+                 *         "customer_id": "cus_123"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {integer} */
+                    max_duration_seconds: 15 | 60 | 300;
+                    allowed_origins: string[];
+                    metadata?: {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Realtime session created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RealtimeSessionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Insufficient credits */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Idempotency conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+            /** @description Realtime is disabled or capacity is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getRealtimeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Realtime session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RealtimeSessionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Realtime session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    closeRealtimeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Realtime session closed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RealtimeSessionResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Realtime session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getUsage: {
         parameters: {
             query?: never;
@@ -1203,6 +1440,11 @@ export interface operations {
                      *         "credits_refunded": 450,
                      *         "concurrency": {
                      *           "limit": 2,
+                     *           "active": 1
+                     *         },
+                     *         "realtime": {
+                     *           "sessions": 3,
+                     *           "credits": 90,
                      *           "active": 1
                      *         },
                      *         "by_workflow": [
