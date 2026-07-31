@@ -51,7 +51,10 @@ try {
       "utf8",
     ),
   );
-  if (installedPackage.version !== "0.1.1") {
+  const workspacePackage = JSON.parse(
+    await readFile(join(root, "packages", "cli", "package.json"), "utf8"),
+  );
+  if (installedPackage.version !== workspacePackage.version) {
     throw new Error("Installed CLI package version did not match the release.");
   }
 

@@ -7,6 +7,21 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-31
+
+### Added
+
+- Type-safe Realtime session create, get, and close methods in
+  `beatapi-client`.
+- Realtime session commands in the `beatapi` CLI with required origin,
+  duration, and idempotency semantics.
+- Realtime Video documentation and explicit API key/client secret boundaries.
+
+### Changed
+
+- Synchronize generated types and the contract lock to the current public
+  BeatAPI OpenAPI baseline.
+
 ## [0.1.1] - 2026-07-20
 
 ### Changed
@@ -30,6 +45,7 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Structured errors, request IDs, bounded retries, CI, package checks, and npm
   release automation.
 
-[Unreleased]: https://github.com/BeatAPI/beatapi-cli/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/BeatAPI/beatapi-cli/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/BeatAPI/beatapi-cli/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/BeatAPI/beatapi-cli/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/BeatAPI/beatapi-cli/releases/tag/v0.1.0

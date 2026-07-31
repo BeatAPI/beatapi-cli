@@ -8,6 +8,7 @@ export type BeatAPIUsage = components["schemas"]["Usage"];
 export type BeatAPIFile = components["schemas"]["File"];
 export type BeatAPIShotMedia = components["schemas"]["ShotMedia"];
 export type BeatAPIWebhook = components["schemas"]["WebhookEndpoint"];
+export type BeatAPIRealtimeSession = components["schemas"]["RealtimeSession"];
 export type BeatAPIDeleteResult = components["schemas"]["DeleteResponse"]["data"];
 
 export type MusicVideoTaskInput =
@@ -22,6 +23,8 @@ export type CreateWebhookInput =
   operations["createWebhookEndpoint"]["requestBody"]["content"]["application/json"];
 export type UpdateWebhookInput =
   operations["updateWebhookEndpoint"]["requestBody"]["content"]["application/json"];
+export type CreateRealtimeSessionInput =
+  operations["createRealtimeSession"]["requestBody"]["content"]["application/json"];
 
 type FetchLike = (
   input: string | URL | Request,
@@ -45,6 +48,7 @@ export interface BeatAPIClientOptions {
 interface RequestOptions {
   method?: string | undefined;
   body?: unknown | undefined;
+  headers?: HeadersInit | undefined;
   authenticated?: boolean | undefined;
   retry?: RetryOptions | undefined;
 }
@@ -198,6 +202,9 @@ export class BeatAPIClient {
 
     const headers = new Headers({ accept: "application/json" });
     if (authenticated) headers.set("authorization", `Bearer ${this.apiKey}`);
+    for (const [name, value] of new Headers(options.headers)) {
+      headers.set(name, value);
+    }
 
     let body: BodyInit | undefined;
     if (options.body instanceof FormData) {
@@ -271,6 +278,34 @@ export class BeatAPIClient {
 
   getUsage(): Promise<BeatAPIUsage> {
     return this.request("/v1/usage");
+  }
+
+  createRealtimeSession(
+    input: CreateRealtimeSessionInput,
+    options: { idempotencyKey: string },
+  ): Promise<BeatAPIRealtimeSession> {
+    const idempotencyKey = options.idempotencyKey.trim();
+    if (!idempotencyKey) {
+      throw new TypeError("idempotencyKey must not be empty.");
+    }
+    return this.request("/v1/realtime/sessions", {
+      method: "POST",
+      body: input,
+      headers: { "idempotency-key": idempotencyKey },
+    });
+  }
+
+  getRealtimeSession(sessionId: string): Promise<BeatAPIRealtimeSession> {
+    return this.request(
+      `/v1/realtime/sessions/${encodePathSegment(sessionId)}`,
+    );
+  }
+
+  closeRealtimeSession(sessionId: string): Promise<BeatAPIRealtimeSession> {
+    return this.request(
+      `/v1/realtime/sessions/${encodePathSegment(sessionId)}`,
+      { method: "DELETE" },
+    );
   }
 
   getTask(

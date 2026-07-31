@@ -1,10 +1,12 @@
 import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { basename, extname } from "node:path";
 
 import {
   BeatAPIClient,
   type BeatAPITask,
   type CreateWebhookInput,
+  type CreateRealtimeSessionInput,
   type EcommerceVideoTaskInput,
   type MusicVideoTaskInput,
   type UpdateWebhookInput,
@@ -18,7 +20,7 @@ import {
 import { promptSecret as defaultPromptSecret } from "./prompt.js";
 import { persistWebhookSecret } from "./webhook-secrets.js";
 
-export const VERSION = "0.1.1";
+export const VERSION = "0.2.0";
 
 const HELP = `BeatAPI CLI ${VERSION}
 
@@ -32,6 +34,9 @@ Usage:
   beatapi music-video shots media <task-id> <shot-id>
   beatapi music-video compose <task-id> --shot <shot-id> [--shot <shot-id>]
   beatapi ecommerce-video create --file <input.json>
+  beatapi realtime sessions create --duration <15|60|300> --origin <url> [--origin <url>]
+  beatapi realtime sessions get <session-id>
+  beatapi realtime sessions close <session-id>
   beatapi tasks get <task-id>
   beatapi tasks wait <task-id> [--interval <ms>] [--attempts <count>]
   beatapi webhooks list
@@ -79,6 +84,12 @@ interface ClientLike {
     input: { shot_ids: string[] },
   ): Promise<unknown>;
   createEcommerceVideoTask(input: EcommerceVideoTaskInput): Promise<unknown>;
+  createRealtimeSession(
+    input: CreateRealtimeSessionInput,
+    options: { idempotencyKey: string },
+  ): Promise<unknown>;
+  getRealtimeSession(id: string): Promise<unknown>;
+  closeRealtimeSession(id: string): Promise<unknown>;
   listWebhooks(): Promise<unknown>;
   createWebhook(input: CreateWebhookInput): Promise<unknown>;
   getWebhook(id: string): Promise<unknown>;
@@ -143,6 +154,25 @@ function positiveInteger(
     throw new Error(`${flag} must be a positive integer.`);
   }
   return parsed;
+}
+
+function realtimeDuration(value: string | undefined): 15 | 60 | 300 {
+  const parsed = Number(value);
+  if (parsed !== 15 && parsed !== 60 && parsed !== 300) {
+    throw new Error("--duration must be 15, 60, or 300 seconds.");
+  }
+  return parsed;
+}
+
+function metadataValues(args: string[]): Record<string, string> | undefined {
+  const entries = repeatedFlagValues(args, "--metadata").map((entry) => {
+    const separator = entry.indexOf("=");
+    if (separator <= 0) {
+      throw new Error("--metadata values must use key=value syntax.");
+    }
+    return [entry.slice(0, separator), entry.slice(separator + 1)] as const;
+  });
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 async function readJson<T>(path: string | undefined): Promise<T> {
@@ -335,6 +365,59 @@ export async function run(
   if (resource === "ecommerce-video" && action === "create") {
     const input = await readJson<EcommerceVideoTaskInput>(inputFile(args));
     printJson(await client.createEcommerceVideoTask(input), stdout);
+    return 0;
+  }
+
+  if (
+    resource === "realtime" &&
+    action === "sessions" &&
+    firstIdentifier === "create"
+  ) {
+    const allowedOrigins = repeatedFlagValues(args, "--origin");
+    if (allowedOrigins.length === 0) {
+      throw new Error("At least one --origin <url> is required.");
+    }
+    const metadata = metadataValues(args);
+    const input: CreateRealtimeSessionInput = {
+      max_duration_seconds: realtimeDuration(flagValue(args, "--duration")),
+      allowed_origins: allowedOrigins,
+      ...(metadata ? { metadata } : {}),
+    };
+    printJson(
+      await client.createRealtimeSession(input, {
+        idempotencyKey:
+          flagValue(args, "--idempotency-key") ?? randomUUID(),
+      }),
+      stdout,
+    );
+    return 0;
+  }
+
+  if (
+    resource === "realtime" &&
+    action === "sessions" &&
+    firstIdentifier === "get"
+  ) {
+    printJson(
+      await client.getRealtimeSession(
+        requireIdentifier(secondIdentifier, "Session ID"),
+      ),
+      stdout,
+    );
+    return 0;
+  }
+
+  if (
+    resource === "realtime" &&
+    action === "sessions" &&
+    firstIdentifier === "close"
+  ) {
+    printJson(
+      await client.closeRealtimeSession(
+        requireIdentifier(secondIdentifier, "Session ID"),
+      ),
+      stdout,
+    );
     return 0;
   }
 

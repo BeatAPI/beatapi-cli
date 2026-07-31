@@ -235,3 +235,96 @@ test("exposes the complete launch workflow methods", async () => {
     { method: "DELETE", path: "/v1/webhooks/wh" },
   ]);
 });
+
+test("creates, reads, and closes realtime sessions with safe request semantics", async () => {
+  const requests: Array<{
+    method: string;
+    path: string;
+    idempotencyKey: string | null;
+    body?: unknown;
+  }> = [];
+  const client = new BeatAPIClient({
+    apiKey: "sk_test_value",
+    fetch: async (input, init) => {
+      requests.push({
+        method: init?.method || "GET",
+        path: new URL(String(input)).pathname,
+        idempotencyKey:
+          new Headers(init?.headers).get("idempotency-key"),
+        ...(init?.body
+          ? { body: JSON.parse(String(init.body)) as unknown }
+          : {}),
+      });
+      return jsonResponse({
+        data: {
+          id: "brt_test",
+          object: "realtime.session",
+          status: "ready",
+          expires_at: "2026-07-31T12:00:00Z",
+          max_duration_seconds: 60,
+          allowed_origins: ["https://app.example.com"],
+          credits: { reserved: 1, settled: 0, refunded: 0 },
+          request_id: "req_test",
+          created_at: "2026-07-31T11:59:00Z",
+          connected_at: null,
+          closed_at: null,
+        },
+      });
+    },
+  });
+
+  await client.createRealtimeSession(
+    {
+      max_duration_seconds: 60,
+      allowed_origins: ["https://app.example.com"],
+    },
+    { idempotencyKey: "rt-test-key" },
+  );
+  await client.getRealtimeSession("session/encoded");
+  await client.closeRealtimeSession("session/encoded");
+
+  assert.deepEqual(requests, [
+    {
+      method: "POST",
+      path: "/v1/realtime/sessions",
+      idempotencyKey: "rt-test-key",
+      body: {
+        max_duration_seconds: 60,
+        allowed_origins: ["https://app.example.com"],
+      },
+    },
+    {
+      method: "GET",
+      path: "/v1/realtime/sessions/session%2Fencoded",
+      idempotencyKey: null,
+    },
+    {
+      method: "DELETE",
+      path: "/v1/realtime/sessions/session%2Fencoded",
+      idempotencyKey: null,
+    },
+  ]);
+});
+
+test("rejects a missing realtime idempotency key before making a request", async () => {
+  let requests = 0;
+  const client = new BeatAPIClient({
+    apiKey: "sk_test_value",
+    fetch: async () => {
+      requests += 1;
+      return jsonResponse({ data: {} });
+    },
+  });
+
+  assert.throws(
+    () => client.createRealtimeSession(
+      {
+        max_duration_seconds: 60,
+        allowed_origins: ["https://app.example.com"],
+      },
+      { idempotencyKey: "" },
+    ),
+    /idempotencyKey must not be empty/,
+  );
+  assert.equal(requests, 0);
+});

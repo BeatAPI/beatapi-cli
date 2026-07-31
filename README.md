@@ -1,7 +1,7 @@
 # BeatAPI CLI and TypeScript Client
 
 Official command-line interface and TypeScript client for BeatAPI's public
-asynchronous AI video workflows.
+asynchronous workflows and Realtime Video API.
 
 The repository contains two independently publishable npm packages:
 
@@ -79,6 +79,12 @@ beatapi music-video compose TASK --shot SHOT_1 --shot SHOT_2
 
 beatapi ecommerce-video create --file ./ecommerce-video.json
 
+beatapi realtime sessions create --duration 60 \
+  --origin https://app.example.com \
+  --idempotency-key rt_checkout_123
+beatapi realtime sessions get SESSION
+beatapi realtime sessions close SESSION
+
 beatapi tasks get TASK
 beatapi tasks wait TASK --interval 7000 --attempts 120
 
@@ -132,9 +138,14 @@ try {
 }
 ```
 
-The client exposes every launch-contract operation: workflows, usage, file
+The client exposes every public contract operation: workflows, usage, file
 upload, music-video automatic and manual composition, ecommerce-video tasks,
-task polling, and webhook CRUD.
+task polling, webhook CRUD, and Realtime session create/get/close.
+
+Create Realtime sessions only on a trusted server. The returned `client_secret`
+is short lived and may be handed to the browser SDK; never expose the long-lived
+`sk_` API key to browser code. The browser SDK owns camera access, WebRTC, and
+media rendering. See the [Realtime Video guide](https://docs.beatapi.io/realtime-video).
 
 Retries are bounded and opt-in through method retry options. Task waiting uses
 bounded retries for transient network and retryable server failures. The client
@@ -152,6 +163,8 @@ preserves BeatAPI error code, HTTP status, request ID, details, and honors
   issue reports, or passed as command arguments.
 - Webhook signing secrets are returned once by the API and should be stored
   with the same care as an API key.
+- Realtime `client_secret` values are returned only on create. Treat terminal
+  output and CI logs containing them as sensitive, and close unused sessions.
 
 See [SECURITY.md](./SECURITY.md) for reporting instructions.
 
