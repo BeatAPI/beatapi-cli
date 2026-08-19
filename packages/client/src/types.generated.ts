@@ -21,6 +21,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/media/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List BeatAPI image and video generation models
+         * @description Returns stable BeatAPI model aliases and public input modes. Internal execution routing is not part of this contract.
+         */
+        get: operations["listGenerationModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/images/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an image generation task
+         * @description Creates one asynchronous image task. Select the model-specific request
+         *     contract with `model`, save the returned `data.id`, and poll
+         *     `GET /v1/tasks/{task_id}` until the task succeeds or fails.
+         */
+        post: operations["createImageGenerationTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/videos/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a video generation task
+         * @description Creates one asynchronous video task. Select the model-specific request
+         *     contract with `model`, save the returned `data.id`, and poll
+         *     `GET /v1/tasks/{task_id}` until the task succeeds or fails.
+         */
+        post: operations["createVideoGenerationTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/effects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List active Effects
+         * @description Returns only versioned Effects that have passed BeatAPI publication gates. Internal integration names, template ids, costs, and execution context are never exposed.
+         */
+        get: operations["listEffects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/effects/{effect_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an active Effect */
+        get: operations["getEffect"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/effects/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an Effect task
+         * @description Creates an asynchronous image or video Effect task. Read the catalog
+         *     first: image count, accepted input types, output resolution/duration,
+         *     and execution contract are fixed by the selected Effect version. Send
+         *     an `Idempotency-Key`; an exact replay returns the
+         *     accepted task before remote input URLs are revalidated, while a changed
+         *     body returns `idempotency_conflict`.
+         *
+         *     The USD amount is reserved atomically when accepted, settled on success, and
+         *     fully refunded after a definite processing failure. An uncertain create
+         *     result is not blindly retried and never switches integrations automatically.
+         */
+        post: operations["createEffectTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/music-video/tasks": {
         parameters: {
             query?: never;
@@ -31,39 +161,36 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Music Video
-         * @description Music Video requires public HTTPS image URLs and a public HTTPS audio URL.
-         *     Prompt, language, quality, style, lip reference, subtitle, and format
-         *     controls are optional. BeatAPI detects the audio duration before task
-         *     creation and charges the detected billable duration at the selected
-         *     per-second customer-credit rate. If audio duration cannot be detected,
-         *     `duration` is used as the billing fallback.
+         * Create a Music Video workflow task
+         * @description Music Video requires public HTTPS media URLs. Requests that omit
+         *     `mv_tier` use `standard` and preserve the existing API behavior.
+         *     Premium retains the configured integration host but uses a distinct
+         *     execution path selected internally by BeatAPI.
+         *     Shared controls include prompt, aspect ratio, subtitles, and the tier's
+         *     billing fallback. Language, quality, `lip_sync`, `lip_ref_url`,
+         *     `srt_url`, and `compose_mode` are Standard-only. Premium uses `mv_mode`
+         *     plus `style` and mode-specific images or `lip_ref_urls`. BeatAPI detects audio duration before task
+         *     creation and records the billable duration in Task usage. If audio
+         *     duration cannot be detected, `duration` is used as the billing fallback.
          *
          *     Input limits:
-         *     - Images must contain 1-7 public HTTPS URLs.
+         *     - Standard images must contain 1-7 public HTTPS URLs.
+         *     - Premium `sing` and `sing_perform` accept 0-6 scene images and require 1-2 `lip_ref_urls`.
+         *     - Premium `dance` and `perform` require exactly 6 scene images.
          *     - Use png, jpg, jpeg, or webp images; each image should be 50 MB or smaller.
          *     - Image aspect ratio should be between 1:4 and 4:1.
-         *     - Audio must be a public HTTPS mp3, wav, aac, or m4a URL between 10 and 180 seconds.
+         *     - Standard audio must be 10-180 seconds; Premium audio must be 10-300 seconds and contain vocals or lyrics rather than instrumental-only audio.
          *     - The audio file should be 50 MB or smaller.
          *     - `prompt` is optional and must be at most 3000 characters.
-         *     - `lip_ref_url`, when provided, must be a public HTTPS image URL. Use a clear, front-facing close-up face reference for best lip-sync results.
-         *     - `srt_url`, when provided, must point to an `.srt` subtitle file.
-         *     - `duration` is only a billing fallback when BeatAPI cannot detect the audio length; it must be 10-180 seconds and cannot override a detected audio duration.
+         *     - Standard `lip_sync=true` requires `lip_ref_url`. It must be a public HTTPS image URL showing a clear, front-facing close-up face.
+         *     - Standard `srt_url`, when provided, must point to an `.srt` subtitle file.
+         *     - `duration` is only a billing fallback when BeatAPI cannot detect the audio length; Standard accepts 10-180 seconds and Premium accepts 10-300 seconds. It cannot override a detected audio duration.
          *
          *     BeatAPI validates URL shape, text limits, enum values, combination
          *     limits, and audio duration at task creation. Files uploaded through
          *     `/v1/files` are also checked for type and size before they can be used.
          *     Third-party media URLs must follow the same media requirements and may
          *     be rejected during processing if invalid.
-         *
-         *     Customer pricing:
-         *     - MV 540p standard: 4 credits/s
-         *     - MV 720p standard: 5 credits/s
-         *     - MV 1080p standard: 6 credits/s
-         *     - lip_sync add-on: +2 credits/s
-         *     - MV 720p high: 16 credits/s
-         *     - MV 1080p high: 18 credits/s
-         *     - Ecommerce Video 1080p: 15 credits/s
          *
          *     Combination limits:
          *     - `quality=high` is not supported with `resolution=540p`.
@@ -93,10 +220,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Edit Shot
+         * Edit a Music Video storyboard shot
          * @description Edit one storyboard shot using its BeatAPI `shot_id`. This operation
-         *     charges BeatAPI customer credits using the selected quality/resolution
-         *     rate and the shot duration. Default shot duration is 5 seconds.
+         *     charges the customer USD balance using the applicable task tier and shot
+         *     duration. Standard edits accept only `prompt`. Premium edits accept
+         *     `prompt` plus up to 6 optional replacement `images`. Generation quality,
+         *     resolution, and shot duration are inherited from the original task and
+         *     are not editable request fields.
          *     When the edit finishes, BeatAPI stores the edited shot media and exposes
          *     it on that shot. The existing final Music Video is not replaced until
          *     you call compose with the selected shot ids.
@@ -118,7 +248,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Get Shot Media
+         * Retrieve a Music Video storyboard shot media URL
          * @description Materialize one storyboard shot video using its BeatAPI `shot_id`.
          *     If the shot has not been stored yet, BeatAPI retrieves the current shot
          *     video, stores it under BeatAPI media storage, and returns a BeatAPI media
@@ -144,9 +274,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Compose Video
+         * Compose a Music Video task from selected shots
          * @description Compose selected BeatAPI storyboard shots into the final Music Video.
-         *     This operation charges a fixed 1 BeatAPI customer credit.
+         *     This operation charges a fixed $1 USD.
          */
         post: operations["composeMusicVideoTask"];
         delete?: never;
@@ -165,8 +295,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Ecommerce Video
-         * @description Ecommerce Video requires product images and an explicit output duration.
+         * Create an Ecommerce Video workflow task
+         * @description Ecommerce Video creates a complete product video from public HTTPS product or
+         *     lifestyle images, an explicit duration, and optional creative direction. Upload
+         *     local images with `POST /v1/files`, save the returned Task ID, and poll
+         *     `GET /v1/tasks/{task_id}` until the task succeeds or fails.
          */
         post: operations["createEcommerceVideoTask"];
         delete?: never;
@@ -206,9 +339,9 @@ export interface paths {
         put?: never;
         /**
          * Create a realtime browser session
-         * @description Reserve credits and allocate a short-lived BeatAPI realtime session. Send a unique
+         * @description Reserve the selected USD amount and allocate a short-lived BeatAPI realtime session. Send a unique
          *     `Idempotency-Key`; retries with the same user, key, and body return the same session
-         *     and deterministic short-lived `client_secret` without reserving credits or capacity
+         *     and deterministic short-lived `client_secret` without reserving funds or capacity
          *     twice. The browser receives only that BeatAPI secret and connects with
          *     `@beatapi/realtime`.
          *
@@ -289,7 +422,7 @@ export interface paths {
          *       (`image/png`, `image/jpeg`, `image/webp`).
          *     - Audio: `mp3`, `wav`, `aac`, `m4a`
          *       (`audio/mpeg`, `audio/wav`, `audio/aac`, `audio/mp4`).
-         *     - Audio uploads must be 10-180 seconds.
+         *     - Audio uploads must be 10-300 seconds. The selected Music Video tier applies its own task limit: Standard 10-180 seconds; Premium 10-300 seconds.
          *     - Subtitles: `srt` (`application/x-subrip`; multipart uploads may use
          *       `text/plain` only when the filename ends in `.srt`).
          *     - PDF, generic text files, octet-stream uploads, videos, and zip files
@@ -321,8 +454,9 @@ export interface paths {
         put?: never;
         /**
          * Create a webhook endpoint
-         * @description The signing secret is returned only once at creation time. Store it
-         *     securely. Later responses return a masked secret.
+         * @description The public API returns the signing secret in full at creation time. Store
+         *     it securely; later public API responses return a masked secret. An
+         *     authenticated dashboard owner can explicitly reveal the secret again.
          *
          *     BeatAPI sends these headers with each delivery:
          *     - `x-beatapi-event`: `task.succeeded` or `task.failed`
@@ -386,8 +520,9 @@ export interface paths {
          *     ```
          *
          *     Reject old timestamps to prevent replay attacks. A 5 minute window is
-         *     recommended. Failed deliveries are retried at most 3 times with fixed
-         *     backoff windows of 1 minute, 5 minutes, and 15 minutes. Polling
+         *     recommended. A delivery is attempted at most 3 times total: the initial
+         *     request plus up to 2 retries, with fixed backoff windows of 1 minute and
+         *     5 minutes. Polling
          *     `GET /v1/tasks/{task_id}` remains the source of truth.
          */
         post: operations["createWebhookEndpoint"];
@@ -417,7 +552,30 @@ export interface paths {
         trace?: never;
     };
 }
-export type webhooks = Record<string, never>;
+export interface webhooks {
+    taskCompleted: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive a BeatAPI task completion event
+         * @description BeatAPI sends this request to each active endpoint subscribed to the event.
+         *     Verify `x-beatapi-signature` against the exact request body and use polling
+         *     as the source of truth if delivery is delayed or fails.
+         */
+        post: operations["receiveBeatApiTaskEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+}
 export interface components {
     schemas: {
         Workflow: {
@@ -440,33 +598,60 @@ export interface components {
              * @example shot_xxx
              */
             id: string;
-            /** @example 0 */
+            /**
+             * @description Zero-based shot order in the storyboard.
+             * @example 0
+             */
             index: number;
+            /** @description Current lifecycle state for this storyboard shot. */
             status: components["schemas"]["TaskStatus"];
-            /** @example 5 */
+            /**
+             * @description Planned or generated shot duration in seconds.
+             * @example 5
+             */
             duration_seconds?: number;
-            /** @example Opening lyric shot. */
+            /**
+             * @description Creative instruction used to generate this shot.
+             * @example Opening lyric shot.
+             */
             prompt?: string;
-            /** @example Intro */
+            /**
+             * @description Lyric segment aligned with this shot when available.
+             * @example Intro
+             */
             lyric_text?: string;
             /** @description Present only after the shot media has been materialized or after a shot edit finishes. */
             media?: {
-                /** @example video */
+                /**
+                 * @description Hosted media type for the materialized shot.
+                 * @example video
+                 */
                 type?: string;
                 /**
                  * Format: uri
+                 * @description BeatAPI-hosted HTTPS URL for the materialized shot.
                  * @example https://media.beatapi.io/outputs/task_8K2qA/shots/0.mp4
                  */
                 url?: string;
-                /** @example video/mp4 */
+                /**
+                 * @description MIME type of the hosted shot media.
+                 * @example video/mp4
+                 */
                 mime_type?: string;
             };
-            /** @example 1782210000 */
+            /**
+             * @description Unix timestamp when the shot record was created.
+             * @example 1782210000
+             */
             created_at: number;
-            /** @example 1782210300 */
+            /**
+             * @description Unix timestamp when the shot record last changed.
+             * @example 1782210300
+             */
             updated_at: number;
         };
         Storyboard: {
+            /** @description Ordered Music Video storyboard shots. The array may be empty before storyboard generation completes. */
             shots: components["schemas"]["StoryboardShot"][];
         };
         ShotMedia: {
@@ -498,68 +683,209 @@ export interface components {
             request_id: string;
         };
         TaskUsage: {
-            /** @description BeatAPI customer credits reserved for this task. */
+            /**
+             * Format: double
+             * @description USD amount reserved for this task. The compatibility field name is retained; 1 Credit equals $1 USD.
+             */
             credits_reserved: number;
-            /** @description BeatAPI customer credits charged when the task or operation is accepted. */
+            /**
+             * Format: double
+             * @description USD amount charged when the task or operation is accepted.
+             */
             credits_charged: number;
-            /** @description Server-detected or request-declared billable duration used for credit calculation. */
+            /** @description Server-detected or request-declared billable duration used for USD calculation. */
             billable_duration_seconds?: number;
-            /** @description BeatAPI customer credits settled after successful work. */
+            /**
+             * Format: double
+             * @description USD amount settled after successful work.
+             */
             credits_settled: number;
-            /** @description BeatAPI customer credits refunded after failed eligible work. */
+            /**
+             * Format: double
+             * @description USD amount refunded after failed eligible work.
+             */
             credits_refunded: number;
         };
         Task: {
-            /** @example task_8K2qA */
+            /**
+             * @description Stable BeatAPI task ID used for polling and support.
+             * @example task_8K2qA
+             */
             id: string;
-            /** @enum {string} */
+            /**
+             * @description Object discriminator; always `task`.
+             * @enum {string}
+             */
             object: "task";
             /**
+             * @description Public task family that determines which capability fields are present.
+             * @enum {string}
+             */
+            task_kind: "workflow" | "effect" | "image" | "video";
+            /** @description Stable BeatAPI workflow, Effect, or generation model ID selected when the task was accepted. */
+            capability_id: string;
+            /** @description Immutable capability version used by this task. Legacy workflow rows are returned as version 1. */
+            capability_version: number | null;
+            /**
+             * @description Present for workflow tasks; identifies the selected BeatAPI workflow.
              * @example music-video
              * @enum {string}
              */
-            workflow: "music-video" | "ecommerce-video";
+            workflow?: "music-video" | "ecommerce-video";
+            /**
+             * @description Present for Effect tasks; stable selected Effect ID.
+             * @example video-muscle-max
+             */
+            effect_id?: string;
+            /**
+             * @description Present for Effect tasks; immutable Effect version used for processing.
+             * @example 1
+             */
+            effect_version?: number;
+            /**
+             * @description Present when task_kind is image or video.
+             * @enum {string}
+             */
+            media_type?: "image" | "video";
+            /** @description Stable BeatAPI model alias. It is independent from internal execution routing. */
+            model?: string;
+            /** @description Current task lifecycle status. Stop polling at `succeeded` or `failed`; Music Video can also require manual action. */
             status: components["schemas"]["TaskStatus"];
+            /** @description Current processing stage, exposed separately so workflow progress can be tracked. */
             stage: components["schemas"]["TaskStatus"];
+            /** @description Music Video storyboard metadata when available. */
             storyboard?: components["schemas"]["Storyboard"];
+            /** @description Unix timestamp when BeatAPI accepted the task. */
             created_at: number;
+            /** @description Unix timestamp of the latest task update. */
             updated_at: number;
+            /** @description Terminal Unix timestamp, or null while work is in progress. */
             completed_at: number | null;
             /** @description Output is null until the task succeeds. */
             output: null | {
+                /** @description BeatAPI-hosted result assets. */
                 media: {
-                    /** @enum {string} */
-                    type: "video";
-                    /** Format: uri */
+                    /**
+                     * @description Result asset type.
+                     * @enum {string}
+                     */
+                    type: "image" | "video";
+                    /**
+                     * Format: uri
+                     * @description BeatAPI-hosted HTTPS result URL.
+                     */
                     url: string;
-                    /** @example video/mp4 */
+                    /**
+                     * @description Result asset MIME type.
+                     * @example video/mp4
+                     * @example image/png
+                     * @example image/jpeg
+                     * @example image/webp
+                     */
                     mime_type: string;
                 }[];
-                /** Format: uri */
+                /**
+                 * Format: uri
+                 * @description Primary BeatAPI-hosted result URL for clients that need one canonical asset.
+                 */
                 r2_url: string;
             };
+            /** @description USD reservation, settlement, refund, and optional billable duration for this task. */
             usage: components["schemas"]["TaskUsage"];
-            /** @example req_abc123 */
+            /**
+             * @description Correlation ID to retain for logs and BeatAPI support.
+             * @example req_abc123
+             */
             request_id: string;
-            /** @example processing_timeout */
+            /**
+             * @description Machine-readable terminal failure code, or null when no task failure is recorded.
+             * @example processing_timeout
+             */
             error_code: string | null;
+            /** @description Human-readable terminal failure detail, or null when no task failure is recorded. */
             error_message: string | null;
         };
-        File: {
-            /** @example file_3xYz9 */
+        Effect: {
+            /** @example video-muscle-max */
             id: string;
             /** @enum {string} */
+            object: "effect";
+            /** @example Muscle Transformation */
+            name: string;
+            description: string;
+            /** @enum {string} */
+            output_type: "image" | "video";
+            /** @example transformation */
+            category: string;
+            tags: string[];
+            input: {
+                images_min: number;
+                images_max: number;
+                accepted_types: ("image/jpeg" | "image/png" | "image/webp")[];
+                /** @description Maximum downloaded bytes per input image. When omitted, BeatAPI enforces 50 MB. */
+                max_size_mb?: number;
+                /** @description Maximum decoded width or height. BeatAPI inspects the actual image header before charging. */
+                max_dimension_px?: number;
+                subject_requirements?: string[];
+            };
+            options: {
+                aspect_ratios?: string[];
+                resolutions?: string[];
+                duration_seconds?: number[];
+                bgm?: boolean;
+                seed?: boolean;
+            };
+            preview: {
+                /** Format: uri */
+                cover_url: string | null;
+                /** Format: uri */
+                media_url: string | null;
+            };
+            version: number;
+            /** @enum {string} */
+            status: "testing" | "active" | "paused";
+        };
+        EffectResponse: {
+            data: components["schemas"]["Effect"];
+        };
+        EffectListResponse: {
+            data: {
+                /** @enum {string} */
+                object: "list";
+                data: components["schemas"]["Effect"][];
+            };
+        };
+        File: {
+            /**
+             * @description Stable uploaded file ID.
+             * @example file_3xYz9
+             */
+            id: string;
+            /**
+             * @description Object discriminator; always `file`.
+             * @enum {string}
+             */
             object: "file";
             /**
              * Format: uri
+             * @description Long-lived BeatAPI HTTPS URL to use in workflow or model requests.
              * @example https://media.beatapi.io/inputs/file_3xYz9.mp3
              */
             url: string;
-            /** @example inputs/file_3xYz9.mp3 */
+            /**
+             * @description BeatAPI storage key for support and diagnostics.
+             * @example inputs/file_3xYz9.mp3
+             */
             key: string;
-            /** @example audio/mpeg */
+            /**
+             * @description Accepted MIME type detected for the uploaded file.
+             * @example audio/mpeg
+             */
             mime_type: string;
-            /** @example 1048576 */
+            /**
+             * @description Uploaded file size in bytes.
+             * @example 1048576
+             */
             size_bytes: number;
             /**
              * @description Present for uploaded audio files after server-side duration detection.
@@ -571,32 +897,54 @@ export interface components {
              * @example mp3_frame_scan
              */
             audio_duration_source?: string;
-            /** @enum {string} */
+            /**
+             * @description File purpose; currently always `input`.
+             * @enum {string}
+             */
             purpose: "input";
-            /** @example 1782210000 */
+            /**
+             * @description Unix timestamp when the file was stored.
+             * @example 1782210000
+             */
             created_at: number;
         };
         WebhookEndpoint: {
-            /** @example wh_9aBcD */
+            /**
+             * @description Stable webhook endpoint ID used for get, update, and delete operations.
+             * @example wh_9aBcD
+             */
             id: string;
-            /** @enum {string} */
+            /**
+             * @description Object discriminator; always `webhook_endpoint`.
+             * @enum {string}
+             */
             object: "webhook_endpoint";
             /**
              * Format: uri
+             * @description Public HTTPS callback URL receiving subscribed task events.
              * @example https://example.com/beatapi-webhook
              */
             url: string;
-            /** @example Production webhook */
+            /**
+             * @description Account-defined label for the endpoint.
+             * @example Production webhook
+             */
             description: string;
+            /** @description Task event types delivered to this endpoint. */
             events: ("task.succeeded" | "task.failed")[];
-            /** @enum {string} */
+            /**
+             * @description Delivery status. Disabled endpoints do not receive events.
+             * @enum {string}
+             */
             status: "active" | "disabled";
             /**
              * @description Returned in full only when the endpoint is created. Later responses return a masked value.
              * @example whsec_example_masked
              */
             secret: string;
+            /** @description Unix timestamp when the endpoint was created. */
             created_at: number;
+            /** @description Unix timestamp when the endpoint last changed. */
             updated_at: number;
         };
         WebhookEvent: {
@@ -615,33 +963,518 @@ export interface components {
         WorkflowListResponse: {
             data: components["schemas"]["WorkflowList"];
         };
+        GenerationModel: {
+            /** @enum {string} */
+            id: "nano-banana" | "nano-banana-pro" | "gpt-image-2" | "seedream-5-pro" | "minimax-h3" | "seedance-2" | "seedance-2-fast" | "seedance-2-mini" | "veo-3.1" | "seedance-2.5" | "kling-3";
+            /** @enum {string} */
+            object: "generation_model";
+            name: string;
+            /** @enum {string} */
+            media_type: "image" | "video";
+            input_modes: ("text" | "image" | "frames" | "reference")[];
+        };
+        GenerationModelList: {
+            /** @enum {string} */
+            object: "list";
+            data: components["schemas"]["GenerationModel"][];
+        };
+        GenerationModelListResponse: {
+            data: components["schemas"]["GenerationModelList"];
+        };
+        ImageGenerationTaskCreateRequest: components["schemas"]["NanoBananaImageRequest"] | components["schemas"]["NanoBananaProImageRequest"] | components["schemas"]["GptImage2Request"] | components["schemas"]["Seedream5ProImageRequest"];
+        NanoBananaImageRequest: {
+            /**
+             * @description Must be `nano-banana`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "nano-banana";
+            /** @description Generation instructions. */
+            prompt: string;
+            /**
+             * @description Output image aspect ratio.
+             * @default 1:1
+             * @enum {string}
+             */
+            aspect_ratio: "1:1" | "9:16" | "16:9" | "3:4" | "4:3" | "3:2" | "2:3" | "5:4" | "4:5" | "21:9" | "auto";
+            /**
+             * @description Output image file format.
+             * @default png
+             * @enum {string}
+             */
+            output_format: "png" | "jpeg";
+        };
+        NanoBananaProImageRequest: {
+            /**
+             * @description Must be `nano-banana-pro`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "nano-banana-pro";
+            /** @description Generation or image-editing instructions. */
+            prompt: string;
+            /** @description Public HTTPS reference-image URLs. Omit for text-to-image. */
+            images?: string[];
+            /**
+             * @description Output image aspect ratio.
+             * @default 1:1
+             * @enum {string}
+             */
+            aspect_ratio: "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "4:5" | "5:4" | "9:16" | "16:9" | "21:9" | "auto";
+            /**
+             * @description Output resolution tier.
+             * @default 1K
+             * @enum {string}
+             */
+            resolution: "1K" | "2K" | "4K";
+            /**
+             * @description Output image file format.
+             * @default png
+             * @enum {string}
+             */
+            output_format: "png" | "jpg";
+        };
+        /**
+         * @description `auto` only supports 1K. `1:1` does not support 4K. At 2K/4K,
+         *     `5:4`, `4:5`, `3:1`, `1:3`, and `9:21` are unavailable.
+         */
+        GptImage2Request: {
+            /**
+             * @description Must be `gpt-image-2`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "gpt-image-2";
+            /** @description Generation or image-editing instructions. */
+            prompt: string;
+            /** @description Public HTTPS reference-image URLs. Omit for text-to-image. */
+            images?: string[];
+            /**
+             * @description Output image aspect ratio. Availability also depends on resolution.
+             * @default auto
+             * @enum {string}
+             */
+            aspect_ratio: "auto" | "1:1" | "3:2" | "2:3" | "4:3" | "3:4" | "5:4" | "4:5" | "16:9" | "9:16" | "2:1" | "1:2" | "3:1" | "1:3" | "21:9" | "9:21";
+            /**
+             * @description Output resolution tier.
+             * @default 1K
+             * @enum {string}
+             */
+            resolution: "1K" | "2K" | "4K";
+        };
+        Seedream5ProImageRequest: {
+            /**
+             * @description Must be `seedream-5-pro`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "seedream-5-pro";
+            /** @description Generation or image-editing instructions. */
+            prompt: string;
+            /** @description Public HTTPS reference-image URLs. Omit for text-to-image. */
+            images?: string[];
+            /**
+             * @description Output image aspect ratio.
+             * @default 1:1
+             * @enum {string}
+             */
+            aspect_ratio: "auto" | "1:1" | "4:3" | "3:4" | "16:9" | "9:16" | "3:2" | "2:3" | "21:9";
+            /**
+             * @description Output resolution tier.
+             * @default 1K
+             * @enum {string}
+             */
+            resolution: "1K" | "2K";
+            /**
+             * @description Output image file format.
+             * @default png
+             * @enum {string}
+             */
+            output_format: "png" | "jpeg";
+        };
+        VideoGenerationTaskCreateRequest: components["schemas"]["MinimaxH3VideoRequest"] | components["schemas"]["Seedance2VideoRequest"] | components["schemas"]["Seedance2FastVideoRequest"] | components["schemas"]["Seedance2MiniVideoRequest"] | components["schemas"]["Veo31VideoRequest"] | components["schemas"]["Seedance25VideoRequest"] | components["schemas"]["Kling3VideoRequest"];
+        /** @description `images` cannot be combined with any `reference_*` input. */
+        MinimaxH3VideoRequest: {
+            /**
+             * @description Must be `minimax-h3`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "minimax-h3";
+            /** @description Video generation instructions. */
+            prompt: string;
+            /** @description One first-frame image or first- and last-frame images as public HTTPS URLs. */
+            images?: string[];
+            /** @description Public HTTPS image references for multimodal reference generation. */
+            reference_images?: string[];
+            /** @description Public HTTPS video references for multimodal reference generation. */
+            reference_videos?: string[];
+            /** @description Public HTTPS audio references for multimodal reference generation. */
+            reference_audios?: string[];
+            /**
+             * @description Requested output duration in seconds.
+             * @default 5
+             */
+            duration: number;
+            /**
+             * @description Output video aspect ratio.
+             * @default adaptive
+             * @enum {string}
+             */
+            aspect_ratio: "adaptive" | "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
+            /**
+             * @description Output resolution tier.
+             * @default 768P
+             * @enum {string}
+             */
+            resolution: "768P" | "2K";
+        };
+        /** @description `images` cannot be combined with any `reference_*` input. An audio reference also requires at least one reference image or video. */
+        Seedance2VideoRequest: {
+            /**
+             * @description Must be `seedance-2`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "seedance-2";
+            /** @description Video generation instructions. */
+            prompt: string;
+            /** @description One first-frame image or first- and last-frame images as public HTTPS URLs. */
+            images?: string[];
+            /** @description Public HTTPS image references for multimodal reference generation. */
+            reference_images?: string[];
+            /** @description Public HTTPS video references for multimodal reference generation. */
+            reference_videos?: string[];
+            /** @description Public HTTPS audio references. Audio also requires at least one reference image or video. */
+            reference_audios?: string[];
+            /**
+             * @description Requested output duration in seconds.
+             * @default 5
+             */
+            duration: number;
+            /**
+             * @description Output video aspect ratio.
+             * @default adaptive
+             * @enum {string}
+             */
+            aspect_ratio: "adaptive" | "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
+            /**
+             * @description Output resolution tier.
+             * @default 720p
+             * @enum {string}
+             */
+            resolution: "480p" | "720p" | "1080p" | "4k";
+            /**
+             * @description Generate synchronized audio with the video.
+             * @default true
+             */
+            generate_audio: boolean;
+        };
+        /** @description `images` cannot be combined with any `reference_*` input. An audio reference also requires at least one reference image or video. */
+        Seedance2FastVideoRequest: {
+            /**
+             * @description Must be `seedance-2-fast`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "seedance-2-fast";
+            /** @description Video generation instructions. */
+            prompt: string;
+            /** @description One first-frame image or first- and last-frame images as public HTTPS URLs. */
+            images?: string[];
+            /** @description Public HTTPS image references for multimodal reference generation. */
+            reference_images?: string[];
+            /** @description Public HTTPS video references for multimodal reference generation. */
+            reference_videos?: string[];
+            /** @description Public HTTPS audio references. Audio also requires at least one reference image or video. */
+            reference_audios?: string[];
+            /**
+             * @description Requested output duration in seconds.
+             * @default 5
+             */
+            duration: number;
+            /**
+             * @description Output video aspect ratio.
+             * @default adaptive
+             * @enum {string}
+             */
+            aspect_ratio: "adaptive" | "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
+            /**
+             * @description Output resolution tier.
+             * @default 720p
+             * @enum {string}
+             */
+            resolution: "480p" | "720p";
+            /**
+             * @description Generate synchronized audio with the video.
+             * @default true
+             */
+            generate_audio: boolean;
+        };
+        /** @description Low-cost Seedance 2.0 route. `images` cannot be combined with any `reference_*` input. Generated audio is not supported. */
+        Seedance2MiniVideoRequest: {
+            /**
+             * @description Must be `seedance-2-mini`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "seedance-2-mini";
+            /** @description Video generation instructions. */
+            prompt: string;
+            /** @description One first-frame image or first- and last-frame images as public HTTPS URLs. */
+            images?: string[];
+            /** @description Public HTTPS image references for multimodal reference generation. */
+            reference_images?: string[];
+            /** @description Public HTTPS video references for multimodal reference generation. */
+            reference_videos?: string[];
+            /** @description Public HTTPS audio references. Audio also requires at least one reference image or video. */
+            reference_audios?: string[];
+            /**
+             * @description Requested output duration in seconds.
+             * @default 5
+             */
+            duration: number;
+            /**
+             * @description Output video aspect ratio.
+             * @default adaptive
+             * @enum {string}
+             */
+            aspect_ratio: "adaptive" | "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
+            /**
+             * @description Output resolution tier.
+             * @default 720p
+             * @enum {string}
+             */
+            resolution: "480p" | "720p";
+        };
+        Veo31VideoRequest: (components["schemas"]["Veo31TextOrFrameVideoRequest"] | components["schemas"]["Veo31ReferenceVideoRequest"]) & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            model: "veo-3.1";
+        };
+        /**
+         * @description Veo 3.1 text or first/last-frame generation. Output is fixed at 8 seconds
+         *     and defaults to the Quality tier.
+         */
+        Veo31TextOrFrameVideoRequest: {
+            /**
+             * @description Must be `veo-3.1`.
+             * @constant
+             */
+            model: "veo-3.1";
+            /** @description Video generation instructions. */
+            prompt: string;
+            /** @description One first-frame image or first- and last-frame images as public HTTPS URLs. */
+            images?: string[];
+            /**
+             * @description Output video aspect ratio.
+             * @default 16:9
+             * @enum {string}
+             */
+            aspect_ratio: "16:9" | "9:16" | "auto";
+            /**
+             * @description Text or frame generation tier.
+             * @default Quality
+             * @enum {string}
+             */
+            quality: "Quality" | "Fast" | "Lite";
+            /** @description Optional watermark text forwarded to the selected model. */
+            watermark?: string;
+            /** @description Allow prompt translation before generation. */
+            enable_translation?: boolean;
+        };
+        /**
+         * @description Veo 3.1 reference-image generation. Output is fixed at 8 seconds and
+         *     supports the Fast or Lite tier, defaulting to Fast.
+         */
+        Veo31ReferenceVideoRequest: {
+            /**
+             * @description Must be `veo-3.1`.
+             * @constant
+             */
+            model: "veo-3.1";
+            /** @description Video generation instructions. */
+            prompt: string;
+            /** @description Public HTTPS reference images. */
+            reference_images: string[];
+            /**
+             * @description Output video aspect ratio.
+             * @default 16:9
+             * @enum {string}
+             */
+            aspect_ratio: "16:9" | "9:16" | "auto";
+            /**
+             * @description Reference-image generation tier.
+             * @default Fast
+             * @enum {string}
+             */
+            quality: "Fast" | "Lite";
+            /** @description Optional watermark text forwarded to the selected model. */
+            watermark?: string;
+            /** @description Allow prompt translation before generation. */
+            enable_translation?: boolean;
+        };
+        /** @description `images` cannot be combined with any `reference_*` input. An audio reference also requires at least one reference image or video. */
+        Seedance25VideoRequest: {
+            /**
+             * @description Must be `seedance-2.5`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "seedance-2.5";
+            /** @description Video generation instructions. */
+            prompt: string;
+            /** @description One first-frame image or first- and last-frame images as public HTTPS URLs. */
+            images?: string[];
+            /** @description Public HTTPS image references for multimodal reference generation. */
+            reference_images?: string[];
+            /** @description Public HTTPS video references for multimodal reference generation. */
+            reference_videos?: string[];
+            /** @description Public HTTPS audio references. Audio also requires at least one reference image or video. */
+            reference_audios?: string[];
+            /**
+             * @description Requested output duration in seconds.
+             * @default 5
+             */
+            duration: number;
+            /**
+             * @description Output video aspect ratio.
+             * @default adaptive
+             * @enum {string}
+             */
+            aspect_ratio: "adaptive" | "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
+            /**
+             * @description Seedance 2.5 currently returns 720p output.
+             * @default 720p
+             * @constant
+             */
+            resolution: "720p";
+            /**
+             * @description Generate synchronized audio with the video.
+             * @default true
+             */
+            generate_audio: boolean;
+            /**
+             * @description Reproducibility seed. Use -1 for a random seed.
+             * @default -1
+             */
+            seed: number;
+        };
+        KlingShot: {
+            /** @description Instructions for this shot. */
+            prompt: string;
+            /** @description Shot duration in seconds. All shot durations must sum to the task duration. */
+            duration: number;
+        };
+        /** @description Use 2-4 image URLs or one video URL. A video element may include one audio URL and a 3-8 second segment in milliseconds. */
+        KlingElement: {
+            /** @description Stable name used to reference this element in the prompt. */
+            name: string;
+            /** @description Optional description of the subject or object. */
+            description?: string;
+            /** @description Two to four image URLs, or one video URL. */
+            element_input_urls: string[];
+            /** @description Optional audio URL used with a video element. */
+            element_input_audio_urls?: string[];
+            /** @description Video element segment start time in milliseconds. */
+            start_time?: number;
+            /** @description Video element segment end time in milliseconds. The segment must be 3-8 seconds. */
+            end_time?: number;
+        };
+        /** @description Multi-shot mode accepts one first-frame image, requires `multi_prompt`, and defaults sound to true. Shot durations must sum to `duration`. */
+        Kling3VideoRequest: {
+            /**
+             * @description Must be `kling-3`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "kling-3";
+            /** @description Video generation instructions. */
+            prompt: string;
+            /** @description One first-frame image or first- and last-frame images as public HTTPS URLs. Multi-shot mode accepts exactly one. */
+            images?: string[];
+            /**
+             * @description Requested output duration in seconds.
+             * @default 5
+             */
+            duration: number;
+            /**
+             * @description Defaults to 16:9 for text generation. Omit it with frame images to adapt to the input aspect ratio.
+             * @enum {string}
+             */
+            aspect_ratio?: "16:9" | "9:16" | "1:1";
+            /**
+             * @description Output quality tier.
+             * @default pro
+             * @enum {string}
+             */
+            resolution: "std" | "pro" | "4K";
+            /** @description Generate synchronized sound. Defaults to true in multi-shot mode. */
+            sound?: boolean;
+            /**
+             * @description Enable storyboard-style multi-shot generation.
+             * @default false
+             */
+            multi_shots: boolean;
+            /** @description Shot definitions required when `multi_shots=true`. */
+            multi_prompt?: components["schemas"]["KlingShot"][];
+            /** @description Up to three reusable subject or object references. */
+            elements?: components["schemas"]["KlingElement"][];
+        };
         TaskResponse: {
+            /** @description Accepted or current BeatAPI task state. */
             data: components["schemas"]["Task"];
         };
         Usage: {
             /** @enum {string} */
             object: "usage";
-            /** @description Current credit balance. It may be negative. */
+            /**
+             * Format: double
+             * @description Current USD balance. The compatibility field name is retained; 1 Credit equals $1 USD. The balance may be negative.
+             */
             credit_balance: number;
             total_tasks: number;
+            /** Format: double */
             credits_settled: number;
+            /** Format: double */
             credits_refunded: number;
             concurrency: {
                 /** @example 2 */
                 limit: number;
-                /** @description Active processing tasks currently using BeatAPI processing resources. Music Video storyboard_ready and requires_action tasks can have settled credits without counting toward this value. */
+                /** @description Active processing tasks currently using BeatAPI processing resources. Music Video storyboard_ready and requires_action tasks can have settled USD usage without counting toward this value. */
                 active: number;
             };
+            /** @description Compatibility view containing workflow tasks only. Image, video, and Effect tasks are reported under by_capability instead. */
             by_workflow: {
                 /** @enum {string} */
                 workflow: "music-video" | "ecommerce-video";
                 tasks: number;
+                /** Format: double */
+                credits_settled: number;
+            }[];
+            by_capability: {
+                /** @enum {string} */
+                task_kind: "workflow" | "effect" | "image" | "video";
+                capability_id: string;
+                tasks: number;
+                /** Format: double */
+                credits_settled: number;
+            }[];
+            by_model: {
+                /** @enum {string} */
+                media_type: "image" | "video";
+                model: string;
+                tasks: number;
+                /** Format: double */
+                credits_settled: number;
+            }[];
+            by_api_key: {
+                api_key_id: string;
+                title: string;
+                key_prefix: string;
+                tasks: number;
+                /** Format: double */
                 credits_settled: number;
             }[];
             realtime?: {
                 /** @description Total BeatAPI realtime sessions for this account. */
                 sessions: number;
-                /** @description Credits settled by connected realtime sessions. */
+                /**
+                 * Format: double
+                 * @description USD amount settled by connected realtime sessions.
+                 */
                 credits: number;
                 /** @description Realtime sessions in ready, connecting, or active state. */
                 active: number;
@@ -650,42 +1483,244 @@ export interface components {
         UsageResponse: {
             data: components["schemas"]["Usage"];
         };
-        RealtimeSession: {
-            id: string;
+        MusicVideoTaskCreateRequest: components["schemas"]["StandardMusicVideoTaskCreateRequest"] | components["schemas"]["PremiumMusicVideoTaskCreateRequest"];
+        StandardMusicVideoTaskCreateRequest: {
+            /**
+             * @description May be omitted to preserve the backwards-compatible Standard contract.
+             * @default standard
+             * @enum {string}
+             */
+            mv_tier: "standard";
+            /** @description Standard scene images. Provide 1-7 public HTTPS PNG, JPEG, or WebP URLs; place the primary subject or opening scene first. Upload local files through `POST /v1/files` and use the returned `data.url`. */
+            images: string[];
+            /**
+             * Format: uri
+             * @description Public HTTPS audio URL; Standard audio must be 10-180 seconds.
+             */
+            audio_url: string;
+            /** @description Optional creative direction for story, setting, performance, camera, lighting, and pacing. Maximum 3000 characters. */
+            prompt?: string;
+            /**
+             * @description Dialogue and lyric language used by the Standard workflow.
+             * @enum {string}
+             */
+            language?: "en" | "zh";
+            /**
+             * @description Generation quality tier. High quality is unavailable at 540p.
+             * @default standard
+             * @enum {string}
+             */
+            quality: "standard" | "high";
+            /** @description Optional concise visual style, such as cinematic, anime, documentary, or fashion editorial. */
+            style?: string;
+            /**
+             * @description Target output placement. Set explicitly for the destination player or social feed.
+             * @enum {string}
+             */
+            aspect_ratio?: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
+            /**
+             * @description Output resolution. 540p cannot be combined with high quality or lip sync.
+             * @default 720p
+             * @enum {string}
+             */
+            resolution: "540p" | "720p" | "1080p";
+            /**
+             * @description Generate lip-synchronized performance. When true, `lip_ref_url` is required.
+             * @default false
+             */
+            lip_sync: boolean;
+            /**
+             * Format: uri
+             * @description Public HTTPS close-up, front-facing face image used for Standard lip sync.
+             */
+            lip_ref_url?: string;
+            /**
+             * @description Burn generated or supplied subtitles into the final video.
+             * @default false
+             */
+            add_subtitle: boolean;
+            /**
+             * @description Subtitle text color as a six-digit hexadecimal value. Used when subtitles are enabled.
+             * @example #FFFFFF
+             */
+            subtitle_color?: string;
+            /**
+             * Format: uri
+             * @description Optional public HTTPS `.srt` subtitle file. Upload a local subtitle through `POST /v1/files`.
+             */
+            srt_url?: string;
+            /** @description Billing fallback only; detected audio duration wins. */
+            duration?: number;
+            /**
+             * @description Auto composes the final Music Video; manual pauses at `requires_action` so shots can be reviewed or edited before compose.
+             * @default auto
+             * @enum {string}
+             */
+            compose_mode: "auto" | "manual";
+        } & (unknown & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            mv_tier: "standard";
+        });
+        PremiumMusicVideoTaskCreateRequest: (components["schemas"]["PremiumMusicVideoSingTaskCreateRequest"] | components["schemas"]["PremiumMusicVideoSingPerformTaskCreateRequest"] | components["schemas"]["PremiumMusicVideoDanceTaskCreateRequest"] | components["schemas"]["PremiumMusicVideoPerformTaskCreateRequest"]) & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            mv_tier: "premium";
+        };
+        PremiumMusicVideoTaskRequestBase: {
+            /**
+             * @description Selects the Premium Music Video workflow and its mode-specific inputs.
+             * @enum {string}
+             */
+            mv_tier: "premium";
+            /**
+             * @description Premium performance mode. Sing modes require `lip_ref_urls`; dance and perform require exactly six `images`.
+             * @enum {string}
+             */
+            mv_mode: "sing" | "sing_perform" | "dance" | "perform";
+            /**
+             * Format: uri
+             * @description Public HTTPS audio URL; Premium audio must be 10-300 seconds.
+             */
+            audio_url: string;
+            /** @description Optional creative direction for story, setting, performance, camera, lighting, and pacing. Maximum 3000 characters. */
+            prompt?: string;
+            style?: string;
+            /**
+             * @description Target output placement. Set explicitly for the destination player or social feed.
+             * @enum {string}
+             */
+            aspect_ratio?: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
+            /**
+             * @description Premium output is fixed to 720p.
+             * @default 720p
+             * @enum {string}
+             */
+            resolution: "720p";
+            /**
+             * @description Burn generated subtitles into the final video.
+             * @default false
+             */
+            add_subtitle: boolean;
+            /**
+             * @description Subtitle text color as a six-digit hexadecimal value. Used when subtitles are enabled.
+             * @example #FFFFFF
+             */
+            subtitle_color?: string;
+            /** @description Premium billing fallback only; detected audio duration wins. */
+            duration?: number;
+        };
+        PremiumMusicVideoSingTaskCreateRequest: components["schemas"]["PremiumMusicVideoTaskRequestBase"] & {
             /** @enum {string} */
+            mv_mode?: "sing";
+            /** @description Optional Premium scene images for sing mode. Provide up to six public HTTPS PNG, JPEG, or WebP URLs. */
+            images?: string[];
+            /** @description Required for sing mode. One or two public HTTPS close-up, front-facing face images for lip synchronization. */
+            lip_ref_urls: string[];
+        };
+        PremiumMusicVideoSingPerformTaskCreateRequest: components["schemas"]["PremiumMusicVideoTaskRequestBase"] & {
+            /** @enum {string} */
+            mv_mode?: "sing_perform";
+            /** @description Optional Premium scene images for sing and perform mode. Provide up to six public HTTPS PNG, JPEG, or WebP URLs. */
+            images?: string[];
+            /** @description Required for sing and perform mode. One or two public HTTPS close-up, front-facing face images for lip synchronization. */
+            lip_ref_urls: string[];
+        };
+        PremiumMusicVideoDanceTaskCreateRequest: components["schemas"]["PremiumMusicVideoTaskRequestBase"] & {
+            /** @enum {string} */
+            mv_mode?: "dance";
+            /** @description Required for dance mode. Provide exactly six public HTTPS PNG, JPEG, or WebP scene images. */
+            images: string[];
+        };
+        PremiumMusicVideoPerformTaskCreateRequest: components["schemas"]["PremiumMusicVideoTaskRequestBase"] & {
+            /** @enum {string} */
+            mv_mode?: "perform";
+            /** @description Required for perform mode. Provide exactly six public HTTPS PNG, JPEG, or WebP scene images. */
+            images: string[];
+        };
+        EditMusicVideoShotRequest: {
+            prompt: string;
+            /** @description Premium tasks only. Optional replacement scene images; an empty array is treated as omitted. Standard tasks reject this field. */
+            images?: string[];
+        };
+        RealtimeSession: {
+            /** @description Stable Realtime Session ID used to inspect or close the session. */
+            id: string;
+            /**
+             * @description Object discriminator; always `realtime.session`.
+             * @enum {string}
+             */
             object: "realtime.session";
             /**
              * @description Active means BeatAPI accepted the first billing heartbeat after remote output began.
              * @enum {string}
              */
             status: "ready" | "connecting" | "active" | "closed" | "failed" | "expired";
-            /** @description Returned only by POST. Give this short-lived BeatAPI secret to the browser SDK; never give the browser an sk_ API key. */
-            client_secret?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Time when the unconnected short-lived session credential expires.
+             */
             expires_at: string;
-            /** @enum {integer} */
+            /**
+             * @description Maximum selected live duration and billing tier in seconds.
+             * @enum {integer}
+             */
             max_duration_seconds: 15 | 60 | 300;
+            /** @description Exact browser origins authorized to use this Session. */
             allowed_origins: string[];
+            /** @description USD reservation, settlement, and refund lifecycle for this Realtime Session. Compatibility field names are retained. */
             credits: {
+                /**
+                 * Format: double
+                 * @description USD amount reserved when the Session is created.
+                 */
                 reserved: number;
+                /**
+                 * Format: double
+                 * @description USD amount settled after the first accepted billing heartbeat.
+                 */
                 settled: number;
+                /**
+                 * Format: double
+                 * @description USD amount refunded if the Session ends without billing activation.
+                 */
                 refunded: number;
             };
+            /** @description Correlation ID to retain for logs and BeatAPI support. */
             request_id: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Time when the Session was created.
+             */
             created_at: string;
             /**
              * Format: date-time
              * @description Time of the first accepted BeatAPI billing heartbeat; null before billing activation.
              */
             connected_at: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Time when the Session closed, or null while it remains open.
+             */
             closed_at: string | null;
+        };
+        RealtimeSessionCreated: components["schemas"]["RealtimeSession"] & {
+            /** @description Short-lived BeatAPI browser credential returned only by POST. Never expose an sk_ API key to the browser. */
+            client_secret: string;
+        };
+        RealtimeSessionCreateResponse: {
+            /** @description Created Realtime Session including the one-time short-lived browser credential. */
+            data: components["schemas"]["RealtimeSessionCreated"];
         };
         RealtimeSessionResponse: {
             data: components["schemas"]["RealtimeSession"];
         };
         FileResponse: {
+            /** @description Uploaded file metadata and the public HTTPS URL to use in later requests. */
             data: components["schemas"]["File"];
         };
         WebhookEndpointList: {
@@ -697,6 +1732,7 @@ export interface components {
             data: components["schemas"]["WebhookEndpointList"];
         };
         WebhookEndpointResponse: {
+            /** @description Created or retrieved webhook endpoint. Public API responses return the full signing secret at creation and mask it afterward; authenticated dashboard owners can explicitly reveal it again. */
             data: components["schemas"]["WebhookEndpoint"];
         };
         DeleteResponse: {
@@ -706,10 +1742,16 @@ export interface components {
             };
         };
         Error: {
+            /** @description Structured BeatAPI error. Use `code` for program logic and retain `request_id` for support. */
             error: {
-                /** @enum {string} */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "insufficient_credits" | "idempotency_conflict" | "user_concurrency_exceeded" | "rate_limit_exceeded" | "processing_unavailable" | "processing_failed" | "processing_timeout" | "result_transfer_failed" | "invalid_signature" | "realtime_disabled" | "realtime_capacity_unavailable" | "realtime_session_expired" | "origin_not_allowed" | "invalid_client_secret" | "transport_not_allowed" | "internal_error";
+                /**
+                 * @description Stable machine-readable error code.
+                 * @enum {string}
+                 */
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "insufficient_credits" | "idempotency_conflict" | "user_concurrency_exceeded" | "rate_limit_exceeded" | "content_policy_violation" | "processing_unavailable" | "processing_failed" | "processing_timeout" | "result_transfer_failed" | "invalid_signature" | "realtime_disabled" | "realtime_capacity_unavailable" | "realtime_session_expired" | "origin_not_allowed" | "invalid_client_secret" | "transport_not_allowed" | "internal_error";
+                /** @description Human-readable detail intended for logs and debugging. */
                 message: string;
+                /** @description Correlation ID to retain for BeatAPI support. */
                 request_id: string;
                 /** @description Present on retryable rate-limit or capacity responses when the client should wait before retrying. */
                 retry_after_seconds?: number;
@@ -774,6 +1816,42 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description BeatAPI could not complete the request because of an internal or storage failure. */
+        InternalError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "internal_error",
+                 *         "message": "Internal error. Contact support with the request_id if the problem continues.",
+                 *         "request_id": "req_xxx"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description BeatAPI processing is temporarily unavailable or did not complete within the processing window. */
+        ProcessingUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "processing_unavailable",
+                 *         "message": "Task processing is temporarily unavailable.",
+                 *         "request_id": "req_xxx"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
     };
     parameters: never;
     requestBodies: never;
@@ -824,10 +1902,186 @@ export interface operations {
             429: components["responses"]["RateLimited"];
         };
     };
-    createMusicVideoTask: {
+    listGenerationModels: {
+        parameters: {
+            query?: {
+                media_type?: "image" | "video";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Generation model list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationModelListResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    createImageGenerationTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageGenerationTaskCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Image generation task accepted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Insufficient USD balance */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Idempotency key conflicts with another request body */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    createVideoGenerationTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VideoGenerationTaskCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Video generation task accepted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Insufficient USD balance */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Idempotency key conflicts with another request body */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    listEffects: {
+        parameters: {
+            query?: {
+                output_type?: "image" | "video";
+                category?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active Effect catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectListResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getEffect: {
         parameters: {
             query?: never;
             header?: never;
+            path: {
+                effect_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effect definition and immutable current version contract */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectResponse"];
+                };
+            };
+            /** @description Effect is unknown or not currently published. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createEffectTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -835,62 +2089,128 @@ export interface operations {
             content: {
                 /**
                  * @example {
+                 *       "effect_id": "video-muscle-max",
                  *       "images": [
-                 *         "https://media.beatapi.io/samples/neon-singer.png"
+                 *         "https://media.beatapi.io/samples/portrait.png"
                  *       ],
-                 *       "audio_url": "https://media.beatapi.io/samples/neon-singer-preview.mp3",
-                 *       "prompt": "Neon rooftop performance with metro cutaways and cinematic light trails.",
-                 *       "language": "en",
-                 *       "quality": "standard",
-                 *       "resolution": "720p",
-                 *       "compose_mode": "auto"
+                 *       "options": {
+                 *         "resolution": "720p",
+                 *         "duration": 12
+                 *       }
                  *     }
                  */
                 "application/json": {
-                    /** @description 1-7 public HTTPS image URLs. Use png, jpg, jpeg, or webp images; each image should be 50 MB or smaller, with aspect ratio from 1:4 to 4:1. /v1/files uploads are checked before use; third-party URLs may be rejected during processing if invalid. */
+                    /**
+                     * @description Stable published Effect ID from `GET /v1/effects`.
+                     * @example video-muscle-max
+                     */
+                    effect_id: string;
+                    /** @description Optional immutable version. Omit to use the current published version. */
+                    effect_version?: number;
+                    /** @description Public HTTPS input images in the order required by the selected Effect version. Read `GET /v1/effects/{effect_id}` for the exact count and accepted media rules; upload local files with `POST /v1/files`. */
                     images: string[];
-                    /**
-                     * Format: uri
-                     * @description Public HTTPS audio URL. Use mp3, wav, aac, or m4a; file size should be 50 MB or smaller and duration must be 10-180 seconds.
-                     */
-                    audio_url: string;
-                    /** @description Optional creative prompt, at most 3000 characters. */
-                    prompt?: string;
-                    /** @enum {string} */
-                    language?: "en" | "zh";
-                    lip_sync?: boolean;
-                    /**
-                     * Format: uri
-                     * @description Public HTTPS image URL for lip-sync face reference. Use a clear, front-facing close-up face reference.
-                     */
-                    lip_ref_url?: string;
-                    /** @description Optional style phrase, at most 200 characters. */
-                    style?: string;
-                    /**
-                     * @default standard
-                     * @enum {string}
-                     */
-                    quality?: "standard" | "high";
-                    /** @enum {string} */
-                    aspect_ratio?: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
-                    /**
-                     * @default 720p
-                     * @enum {string}
-                     */
-                    resolution?: "540p" | "720p" | "1080p";
-                    add_subtitle?: boolean;
-                    /** @example #FFFFFF */
-                    subtitle_color?: string;
-                    /** Format: uri */
-                    srt_url?: string;
-                    /** @description Billing fallback when audio duration cannot be detected. It must be 10-180 seconds and cannot override a detected audio duration. */
-                    duration?: number;
-                    /**
-                     * @default auto
-                     * @enum {string}
-                     */
-                    compose_mode?: "auto" | "manual";
+                    /** @description Optional controls supported by the selected Effect version. Omit unsupported controls; the catalog is the source of truth. */
+                    options?: {
+                        /** @description Requested output aspect ratio when the selected Effect exposes this option. */
+                        aspect_ratio?: string;
+                        /** @description Requested output resolution when the selected Effect exposes this option. */
+                        resolution?: string;
+                        /** @description Requested video duration in seconds when the selected Effect exposes this option. */
+                        duration?: number;
+                        /** @description Include background music when supported by the selected Effect. */
+                        bgm?: boolean;
+                        /** @description Optional deterministic seed when supported by the selected Effect. */
+                        seed?: number;
+                    };
                 };
+            };
+        };
+        responses: {
+            /** @description Effect task accepted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "task_effect123",
+                     *         "object": "task",
+                     *         "task_kind": "effect",
+                     *         "capability_id": "video-muscle-max",
+                     *         "capability_version": 1,
+                     *         "effect_id": "video-muscle-max",
+                     *         "effect_version": 1,
+                     *         "status": "queued",
+                     *         "stage": "queued",
+                     *         "created_at": 1782210000,
+                     *         "updated_at": 1782210000,
+                     *         "completed_at": null,
+                     *         "output": null,
+                     *         "usage": {
+                     *           "credits_reserved": 1.2,
+                     *           "credits_charged": 1.2,
+                     *           "credits_settled": 0,
+                     *           "credits_refunded": 0
+                     *         },
+                     *         "request_id": "req_effect123",
+                     *         "error_code": null,
+                     *         "error_message": null
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Insufficient USD balance. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Effect or requested version is unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Idempotency key conflicts with another request body. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    createMusicVideoTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key. Reusing the same key with the same request body returns the accepted task; reusing it with a different body returns `409 idempotency_conflict`.
+                 * @example mv-create-cus_123-01
+                 */
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MusicVideoTaskCreateRequest"];
             };
         };
         responses: {
@@ -900,34 +2220,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "data": {
-                     *         "id": "task_8K2qA",
-                     *         "object": "task",
-                     *         "workflow": "music-video",
-                     *         "status": "queued",
-                     *         "stage": "queued",
-                     *         "storyboard": {
-                     *           "shots": []
-                     *         },
-                     *         "created_at": 1782210000,
-                     *         "updated_at": 1782210000,
-                     *         "completed_at": null,
-                     *         "output": null,
-                     *         "usage": {
-                     *           "credits_reserved": 75,
-                     *           "credits_charged": 75,
-                     *           "billable_duration_seconds": 15,
-                     *           "credits_settled": 0,
-                     *           "credits_refunded": 0
-                     *         },
-                     *         "request_id": "req_abc123",
-                     *         "error_code": null,
-                     *         "error_message": null
-                     *       }
-                     *     }
-                     */
                     "application/json": components["schemas"]["TaskResponse"];
                 };
             };
@@ -944,6 +2236,24 @@ export interface operations {
                      *       "error": {
                      *         "code": "insufficient_credits",
                      *         "message": "Account balance is not sufficient for this task.",
+                     *         "request_id": "req_xxx"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The Idempotency-Key was reused with a different body or while another request with that key is still being processed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "idempotency_conflict",
+                     *         "message": "This Idempotency-Key was already used with a different request body.",
                      *         "request_id": "req_xxx"
                      *       }
                      *     }
@@ -974,7 +2284,13 @@ export interface operations {
     editMusicVideoShot: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optional retry key. Reusing the same key for this task, shot, and request body returns the accepted task without charging the USD amount again; changing any of them returns `409 idempotency_conflict`.
+                 * @example music-edit-task_8K2qA-shot_xxx-01
+                 */
+                "Idempotency-Key"?: string;
+            };
             path: {
                 /** @example task_8K2qA */
                 task_id: string;
@@ -988,26 +2304,12 @@ export interface operations {
                 /**
                  * @example {
                  *       "prompt": "Night city chorus with brighter face lighting.",
-                 *       "duration": 5,
-                 *       "quality": "standard",
-                 *       "resolution": "720p"
+                 *       "images": [
+                 *         "https://media.beatapi.io/samples/stage.png"
+                 *       ]
                  *     }
                  */
-                "application/json": {
-                    prompt: string;
-                    /** @default 5 */
-                    duration?: number;
-                    /**
-                     * @default standard
-                     * @enum {string}
-                     */
-                    quality?: "standard" | "high";
-                    /**
-                     * @default 720p
-                     * @enum {string}
-                     */
-                    resolution?: "540p" | "720p" | "1080p";
-                };
+                "application/json": components["schemas"]["EditMusicVideoShotRequest"];
             };
         };
         responses: {
@@ -1022,6 +2324,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description Account balance is not sufficient for this shot edit. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Task or shot not found. */
             404: {
                 headers: {
@@ -1031,6 +2342,18 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The Idempotency-Key was reused for a different task, shot, or request body, or the same request is still being processed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            502: components["responses"]["ProcessingUnavailable"];
         };
     };
     getMusicVideoShotMedia: {
@@ -1088,12 +2411,21 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            502: components["responses"]["ProcessingUnavailable"];
         };
     };
     composeMusicVideoTask: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optional retry key. Reusing the same key for this task and request body returns the accepted task without charging the $1 compose amount again; changing either returns `409 idempotency_conflict`.
+                 * @example music-compose-task_8K2qA-01
+                 */
+                "Idempotency-Key"?: string;
+            };
             path: {
                 /** @example task_8K2qA */
                 task_id: string;
@@ -1127,6 +2459,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description Account balance is not sufficient for this compose operation. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Task or shot not found. */
             404: {
                 headers: {
@@ -1136,12 +2477,30 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The Idempotency-Key was reused for a different task or request body, or the same request is still being processed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+            502: components["responses"]["ProcessingUnavailable"];
         };
     };
     createEcommerceVideoTask: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optional retry key. Reusing the same key with the same request body returns the accepted task; reusing it with a different body returns `409 idempotency_conflict`.
+                 * @example ecommerce-create-cus_123-01
+                 */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1158,12 +2517,21 @@ export interface operations {
                  *     }
                  */
                 "application/json": {
+                    /** @description Primary product or scene image first, followed by up to six additional public HTTPS PNG, JPEG, or WebP product or lifestyle images. Upload local files with `POST /v1/files` and use the returned `data.url`. */
                     images: string[];
+                    /** @description Required target output duration in seconds and the basis for USD calculation. Allowed range is 10-60 seconds. */
                     duration: number;
+                    /** @description Optional creative direction, audience, product benefit, offer, tone, scenes, or call to action. Maximum 2000 characters. */
                     prompt?: string;
-                    /** @enum {string} */
+                    /**
+                     * @description Target output placement. Use 16:9 for landscape, 9:16 for vertical social, or 1:1 for square placements; set explicitly for stable layout.
+                     * @enum {string}
+                     */
                     aspect_ratio?: "16:9" | "9:16" | "1:1";
-                    /** @enum {string} */
+                    /**
+                     * @description Dialogue and narration language. Use `en` for English or `zh` for Chinese; set explicitly when the prompt contains mixed languages.
+                     * @enum {string}
+                     */
                     language?: "en" | "zh";
                 };
             };
@@ -1180,6 +2548,9 @@ export interface operations {
                      *       "data": {
                      *         "id": "task_p9Lm2",
                      *         "object": "task",
+                     *         "task_kind": "workflow",
+                     *         "capability_id": "ecommerce-video",
+                     *         "capability_version": 1,
                      *         "workflow": "ecommerce-video",
                      *         "status": "queued",
                      *         "stage": "queued",
@@ -1188,8 +2559,8 @@ export interface operations {
                      *         "completed_at": null,
                      *         "output": null,
                      *         "usage": {
-                     *           "credits_reserved": 225,
-                     *           "credits_charged": 225,
+                     *           "credits_reserved": 4.5,
+                     *           "credits_charged": 4.5,
                      *           "billable_duration_seconds": 15,
                      *           "credits_settled": 0,
                      *           "credits_refunded": 0
@@ -1216,6 +2587,24 @@ export interface operations {
                      *       "error": {
                      *         "code": "insufficient_credits",
                      *         "message": "Account balance is not sufficient for this task.",
+                     *         "request_id": "req_xxx"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The Idempotency-Key was reused with a different body or while another request with that key is still being processed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "idempotency_conflict",
+                     *         "message": "This Idempotency-Key was already used with a different request body.",
                      *         "request_id": "req_xxx"
                      *       }
                      *     }
@@ -1281,6 +2670,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /** @example rts-create-cus_123-01 */
                 "Idempotency-Key": string;
             };
             path?: never;
@@ -1300,9 +2690,14 @@ export interface operations {
                  *     }
                  */
                 "application/json": {
-                    /** @enum {integer} */
+                    /**
+                     * @description Required maximum live session duration in seconds. The USD amount is reserved for the selected 15, 60, or 300 second tier.
+                     * @enum {integer}
+                     */
                     max_duration_seconds: 15 | 60 | 300;
+                    /** @description Exact browser origins allowed to use the short-lived session secret. */
                     allowed_origins: string[];
+                    /** @description Optional server-defined string metadata for your own correlation. Up to 20 keys; keys are at most 64 characters and values at most 256 characters. */
                     metadata?: {
                         [key: string]: string;
                     };
@@ -1316,12 +2711,36 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RealtimeSessionResponse"];
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "rts_8K2qA",
+                     *         "object": "realtime.session",
+                     *         "status": "ready",
+                     *         "client_secret": "brt_live_example_short_lived_secret",
+                     *         "expires_at": "2026-08-12T10:01:00.000Z",
+                     *         "max_duration_seconds": 60,
+                     *         "allowed_origins": [
+                     *           "https://app.example.com"
+                     *         ],
+                     *         "credits": {
+                     *           "reserved": 1.2,
+                     *           "settled": 0,
+                     *           "refunded": 0
+                     *         },
+                     *         "request_id": "req_abc123",
+                     *         "created_at": "2026-08-12T10:00:00.000Z",
+                     *         "connected_at": null,
+                     *         "closed_at": null
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RealtimeSessionCreateResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient credits */
+            /** @description Insufficient USD balance */
             402: {
                 headers: {
                     [name: string]: unknown;
@@ -1434,29 +2853,60 @@ export interface operations {
                      * @example {
                      *       "data": {
                      *         "object": "usage",
-                     *         "credit_balance": 1080,
+                     *         "credit_balance": 21.6,
                      *         "total_tasks": 12,
-                     *         "credits_settled": 720,
-                     *         "credits_refunded": 450,
+                     *         "credits_settled": 14.4,
+                     *         "credits_refunded": 9,
                      *         "concurrency": {
                      *           "limit": 2,
                      *           "active": 1
                      *         },
                      *         "realtime": {
                      *           "sessions": 3,
-                     *           "credits": 90,
+                     *           "credits": 1.8,
                      *           "active": 1
                      *         },
                      *         "by_workflow": [
                      *           {
                      *             "workflow": "music-video",
                      *             "tasks": 8,
-                     *             "credits_settled": 480
+                     *             "credits_settled": 9.6
                      *           },
                      *           {
                      *             "workflow": "ecommerce-video",
                      *             "tasks": 4,
-                     *             "credits_settled": 240
+                     *             "credits_settled": 4.8
+                     *           }
+                     *         ],
+                     *         "by_capability": [
+                     *           {
+                     *             "task_kind": "image",
+                     *             "capability_id": "seedream-5-pro",
+                     *             "tasks": 3,
+                     *             "credits_settled": 0.42
+                     *           },
+                     *           {
+                     *             "task_kind": "video",
+                     *             "capability_id": "veo-3.1",
+                     *             "tasks": 2,
+                     *             "credits_settled": 14
+                     *           }
+                     *         ],
+                     *         "by_model": [
+                     *           {
+                     *             "media_type": "image",
+                     *             "model": "seedream-5-pro",
+                     *             "tasks": 3,
+                     *             "credits_settled": 0.42
+                     *           }
+                     *         ],
+                     *         "by_api_key": [
+                     *           {
+                     *             "api_key_id": "key_abc123",
+                     *             "title": "Production",
+                     *             "key_prefix": "sk_live_abcd",
+                     *             "tasks": 12,
+                     *             "credits_settled": 14.4
                      *           }
                      *         ]
                      *       }
@@ -1483,6 +2933,14 @@ export interface operations {
                     /** @enum {string} */
                     purpose?: "input";
                 };
+                "image/png": string;
+                "image/jpeg": string;
+                "image/webp": string;
+                "audio/mpeg": string;
+                "audio/wav": string;
+                "audio/aac": string;
+                "audio/mp4": string;
+                "application/x-subrip": string;
             };
         };
         responses: {
@@ -1513,6 +2971,8 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
         };
     };
     listWebhookEndpoints: {
@@ -1557,6 +3017,8 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
         };
     };
     createWebhookEndpoint: {
@@ -1578,9 +3040,14 @@ export interface operations {
                  *     }
                  */
                 "application/json": {
-                    /** Format: uri */
+                    /**
+                     * Format: uri
+                     * @description Public HTTPS callback URL that accepts BeatAPI task events. Do not use localhost or a private-network URL.
+                     */
                     url: string;
+                    /** @description Optional internal label for identifying the endpoint in your account. */
                     description?: string;
+                    /** @description Task events to deliver. Omit to subscribe to both `task.succeeded` and `task.failed`. */
                     events?: ("task.succeeded" | "task.failed")[];
                 };
             };
@@ -1615,6 +3082,8 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
         };
     };
     getWebhookEndpoint: {
@@ -1666,6 +3135,8 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
         };
     };
     deleteWebhookEndpoint: {
@@ -1698,6 +3169,17 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            /** @description Webhook endpoint not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
         };
     };
     updateWebhookEndpoint: {
@@ -1718,7 +3200,10 @@ export interface operations {
                  *     }
                  */
                 "application/json": {
-                    /** Format: uri */
+                    /**
+                     * Format: uri
+                     * @description Public HTTPS callback URL that accepts BeatAPI task events. Do not use localhost or a private-network URL.
+                     */
                     url?: string;
                     description?: string;
                     /** @enum {string} */
@@ -1739,6 +3224,84 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description Webhook endpoint not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    receiveBeatApiTaskEvent: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-beatapi-event": "task.succeeded" | "task.failed";
+                "x-beatapi-timestamp": string;
+                "x-beatapi-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "id": "evt_123",
+                 *       "event": "task.succeeded",
+                 *       "created_at": 1782210300,
+                 *       "data": {
+                 *         "id": "task_8K2qA",
+                 *         "object": "task",
+                 *         "task_kind": "video",
+                 *         "capability_id": "seedance-2.5",
+                 *         "capability_version": null,
+                 *         "media_type": "video",
+                 *         "model": "seedance-2.5",
+                 *         "status": "succeeded",
+                 *         "stage": "succeeded",
+                 *         "created_at": 1782210000,
+                 *         "updated_at": 1782210300,
+                 *         "completed_at": 1782210300,
+                 *         "output": {
+                 *           "media": [
+                 *             {
+                 *               "type": "video",
+                 *               "url": "https://media.beatapi.io/outputs/task_8K2qA/0.mp4",
+                 *               "mime_type": "video/mp4"
+                 *             }
+                 *           ],
+                 *           "r2_url": "https://media.beatapi.io/outputs/task_8K2qA/0.mp4"
+                 *         },
+                 *         "usage": {
+                 *           "credits_reserved": 1.55,
+                 *           "credits_charged": 1.55,
+                 *           "billable_duration_seconds": 5,
+                 *           "credits_settled": 1.55,
+                 *           "credits_refunded": 0
+                 *         },
+                 *         "request_id": "req_abc123",
+                 *         "error_code": null,
+                 *         "error_message": null
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["WebhookEvent"];
+            };
+        };
+        responses: {
+            /** @description Event accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
 }

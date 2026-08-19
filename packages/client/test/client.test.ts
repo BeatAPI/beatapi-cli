@@ -236,6 +236,66 @@ test("exposes the complete launch workflow methods", async () => {
   ]);
 });
 
+test("exposes unified image, video, model, and Effect methods", async () => {
+  const requests: Array<{
+    method: string;
+    path: string;
+    query: string;
+    idempotencyKey: string | null;
+  }> = [];
+  const client = new BeatAPIClient({
+    apiKey: "sk_test_value",
+    fetch: async (input, init) => {
+      const url = new URL(String(input));
+      requests.push({
+        method: init?.method || "GET",
+        path: url.pathname,
+        query: url.search,
+        idempotencyKey: new Headers(init?.headers).get("idempotency-key"),
+      });
+      if (url.pathname === "/v1/media/models") {
+        return jsonResponse({ data: { object: "list", data: [] } });
+      }
+      if (url.pathname === "/v1/effects") {
+        return jsonResponse({ data: { object: "list", data: [] } });
+      }
+      return jsonResponse({ data: { id: "ok" } });
+    },
+  });
+
+  await client.listGenerationModels();
+  await client.createImageTask({ model: "nano-banana", prompt: "Still" });
+  await client.createVideoTask({ model: "seedance-2-mini", prompt: "Orbit" });
+  await client.listEffects({ outputType: "video", category: "transformation" });
+  await client.getEffect("video/muscle");
+  await client.createEffectTask(
+    {
+      effect_id: "video-muscle-max",
+      images: ["https://media.example.com/portrait.png"],
+    },
+    { idempotencyKey: "effect-test-123" },
+  );
+
+  assert.deepEqual(requests, [
+    { method: "GET", path: "/v1/media/models", query: "", idempotencyKey: null },
+    { method: "POST", path: "/v1/images/tasks", query: "", idempotencyKey: null },
+    { method: "POST", path: "/v1/videos/tasks", query: "", idempotencyKey: null },
+    {
+      method: "GET",
+      path: "/v1/effects",
+      query: "?output_type=video&category=transformation",
+      idempotencyKey: null,
+    },
+    { method: "GET", path: "/v1/effects/video%2Fmuscle", query: "", idempotencyKey: null },
+    {
+      method: "POST",
+      path: "/v1/effects/tasks",
+      query: "",
+      idempotencyKey: "effect-test-123",
+    },
+  ]);
+});
+
 test("creates, reads, and closes realtime sessions with safe request semantics", async () => {
   const requests: Array<{
     method: string;
