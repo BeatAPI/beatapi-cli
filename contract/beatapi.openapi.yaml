@@ -6,11 +6,15 @@ info:
     name: BeatAPI Terms of Service
     url: https://beatapi.io/terms-of-service
   description: |
-    BeatAPI provides async video workflows and short-lived Realtime Video
-    Sessions behind one BeatAPI-native API. Async integrations create a task,
-    poll until it finishes, then read the hosted video URL from `output.media`.
-    Realtime browser integrations create a Session with the same Bearer API key,
-    then pass only the returned BeatAPI `client_secret` to `@beatapi/realtime`.
+    BeatAPI provides a unified API for image generation, video generation, Effects, asynchronous video workflows,
+    and short-lived Realtime Video Sessions.
+
+    For asynchronous operations, create a task, poll the shared task endpoint or receive webhook events,
+    and read hosted output URLs from `output.media`. For Realtime, create a Session on a trusted server
+    with your Bearer API key and pass only the returned short-lived `client_secret` to the browser.
+
+    Customer balances and usage are USD-denominated. Compatibility fields such
+    as `credit_balance` and `credits_reserved` remain in the API; 1 Credit = $1 USD.
 
     ## 5 minute Quick Start
 
@@ -18,7 +22,7 @@ info:
     2. Create an API key in [Dashboard → API Keys](https://beatapi.io/dashboard/apikeys)
        and send it as
        `Authorization: Bearer <BEATAPI_API_KEY>`.
-       Credit packs are available from
+       USD balance top-ups are available from
        [Dashboard → Billing](https://beatapi.io/dashboard/billing).
     3. Use public HTTPS URLs for input media. If your files are local, upload
        them with `POST /v1/files` first.
@@ -27,7 +31,8 @@ info:
     6. Add webhooks later if you do not want to poll.
 
     ```bash
-    export BEATAPI_API_KEY="sk_your_key"
+    read -rsp "BeatAPI API key: " BEATAPI_API_KEY && echo
+    export BEATAPI_API_KEY
 
     curl https://api.beatapi.io/v1/workflows
 
@@ -71,13 +76,13 @@ info:
     public internet. Localhost, private network URLs, and data URLs are rejected.
     Use `POST /v1/files` for local images, audio, or subtitles.
 
-    Each verified new user account starts with 50 welcome credits valid for 14 days and
-    1 active processing concurrency. Lifetime paid credit purchases unlock higher limits:
+    Each verified new user account starts with a $2 welcome balance that never expires and
+    1 active processing concurrency. Lifetime paid purchases unlock higher limits:
     $10+ = 2, $100+ = 5, $1,000+ = 10, $5,000+ = 15, and $20,000+ = 30.
     `GET /v1/usage` returns current usage totals, concurrency limit, and active
     processing task count. Active concurrency measures tasks that are currently
     using BeatAPI processing resources. storyboard_ready and requires_action
-    tasks can have settled credits but do not count toward active processing
+    tasks can have settled USD usage but do not count toward active processing
     concurrency.
 
     ## Webhooks are optional
@@ -95,6 +100,10 @@ tags:
     description: Discover the workflow IDs available for task creation.
   - name: Music Video
     description: Create music video tasks from images, audio, and optional creative controls.
+  - name: Effects
+    description: Discover versioned effects and create image or video effect tasks.
+  - name: Generation
+    description: Discover BeatAPI generation models and create image or video tasks.
   - name: Ecommerce Video
     description: Create product ad video tasks from product images and duration.
   - name: Tasks
@@ -107,6 +116,70 @@ tags:
     description: Upload local assets and use the returned HTTPS URL as workflow input.
   - name: Webhooks
     description: Manage optional completion callbacks.
+webhooks:
+  taskCompleted:
+    post:
+      operationId: receiveBeatApiTaskEvent
+      x-fern-ignore: true
+      tags: [Webhooks]
+      summary: Receive a BeatAPI task completion event
+      description: |
+        BeatAPI sends this request to each active endpoint subscribed to the event.
+        Verify `x-beatapi-signature` against the exact request body and use polling
+        as the source of truth if delivery is delayed or fails.
+      security: []
+      parameters:
+        - in: header
+          name: x-beatapi-event
+          required: true
+          schema: { type: string, enum: [task.succeeded, task.failed] }
+        - in: header
+          name: x-beatapi-timestamp
+          required: true
+          schema: { type: string }
+        - in: header
+          name: x-beatapi-signature
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WebhookEvent' }
+            example:
+              id: evt_123
+              event: task.succeeded
+              created_at: 1782210300
+              data:
+                id: task_8K2qA
+                object: task
+                task_kind: video
+                capability_id: seedance-2.5
+                capability_version: null
+                media_type: video
+                model: seedance-2.5
+                status: succeeded
+                stage: succeeded
+                created_at: 1782210000
+                updated_at: 1782210300
+                completed_at: 1782210300
+                output:
+                  media:
+                    - type: video
+                      url: https://media.beatapi.io/outputs/task_8K2qA/0.mp4
+                      mime_type: video/mp4
+                  r2_url: https://media.beatapi.io/outputs/task_8K2qA/0.mp4
+                usage:
+                  credits_reserved: 1.55
+                  credits_charged: 1.55
+                  billable_duration_seconds: 5
+                  credits_settled: 1.55
+                  credits_refunded: 0
+                request_id: req_abc123
+                error_code: null
+                error_message: null
+      responses:
+        '200': { description: Event accepted }
 components:
   securitySchemes:
     BearerAuth:
@@ -144,17 +217,22 @@ components:
           example: shot_xxx
         index:
           type: integer
+          description: Zero-based shot order in the storyboard.
           example: 0
         status:
           $ref: '#/components/schemas/TaskStatus'
+          description: Current lifecycle state for this storyboard shot.
         duration_seconds:
           type: integer
+          description: Planned or generated shot duration in seconds.
           example: 5
         prompt:
           type: string
+          description: Creative instruction used to generate this shot.
           example: Opening lyric shot.
         lyric_text:
           type: string
+          description: Lyric segment aligned with this shot when available.
           example: Intro
         media:
           type: object
@@ -162,19 +240,24 @@ components:
           properties:
             type:
               type: string
+              description: Hosted media type for the materialized shot.
               example: video
             url:
               type: string
               format: uri
+              description: BeatAPI-hosted HTTPS URL for the materialized shot.
               example: https://media.beatapi.io/outputs/task_8K2qA/shots/0.mp4
             mime_type:
               type: string
+              description: MIME type of the hosted shot media.
               example: video/mp4
         created_at:
           type: integer
+          description: Unix timestamp when the shot record was created.
           example: 1782210000
         updated_at:
           type: integer
+          description: Unix timestamp when the shot record last changed.
           example: 1782210300
     Storyboard:
       type: object
@@ -182,6 +265,7 @@ components:
       properties:
         shots:
           type: array
+          description: Ordered Music Video storyboard shots. The array may be empty before storyboard generation completes.
           items:
             $ref: '#/components/schemas/StoryboardShot'
     ShotMedia:
@@ -230,46 +314,88 @@ components:
       required: [credits_reserved, credits_settled, credits_refunded, credits_charged]
       properties:
         credits_reserved:
-          type: integer
-          description: BeatAPI customer credits reserved for this task.
+          type: number
+          format: double
+          multipleOf: 0.01
+          description: USD amount reserved for this task. The compatibility field name is retained; 1 Credit equals $1 USD.
         credits_charged:
-          type: integer
-          description: BeatAPI customer credits charged when the task or operation is accepted.
+          type: number
+          format: double
+          multipleOf: 0.01
+          description: USD amount charged when the task or operation is accepted.
         billable_duration_seconds:
           type: integer
-          description: Server-detected or request-declared billable duration used for credit calculation.
+          description: Server-detected or request-declared billable duration used for USD calculation.
         credits_settled:
-          type: integer
-          description: BeatAPI customer credits settled after successful work.
+          type: number
+          format: double
+          multipleOf: 0.01
+          description: USD amount settled after successful work.
         credits_refunded:
-          type: integer
-          description: BeatAPI customer credits refunded after failed eligible work.
+          type: number
+          format: double
+          multipleOf: 0.01
+          description: USD amount refunded after failed eligible work.
     Task:
       type: object
-      required: [id, object, workflow, status, stage, created_at, updated_at, completed_at, output, usage, request_id, error_code, error_message]
+      required: [id, object, task_kind, capability_id, capability_version, status, stage, created_at, updated_at, completed_at, output, usage, request_id, error_code, error_message]
       properties:
         id:
           type: string
+          description: Stable BeatAPI task ID used for polling and support.
           example: task_8K2qA
         object:
           type: string
           enum: [task]
+          description: Object discriminator; always `task`.
+        task_kind:
+          type: string
+          enum: [workflow, effect, image, video]
+          description: Public task family that determines which capability fields are present.
+        capability_id:
+          type: string
+          description: Stable BeatAPI workflow, Effect, or generation model ID selected when the task was accepted.
+        capability_version:
+          type: [integer, 'null']
+          description: Immutable capability version used by this task. Legacy workflow rows are returned as version 1.
         workflow:
           type: string
           enum: [music-video, ecommerce-video]
+          description: Present for workflow tasks; identifies the selected BeatAPI workflow.
           example: music-video
+        effect_id:
+          type: string
+          description: Present for Effect tasks; stable selected Effect ID.
+          example: video-muscle-max
+        effect_version:
+          type: integer
+          description: Present for Effect tasks; immutable Effect version used for processing.
+          example: 1
+        media_type:
+          type: string
+          enum: [image, video]
+          description: Present when task_kind is image or video.
+        model:
+          type: string
+          description: Stable BeatAPI model alias. It is independent from internal execution routing.
         status:
           $ref: '#/components/schemas/TaskStatus'
+          description: Current task lifecycle status. Stop polling at `succeeded` or `failed`; Music Video can also require manual action.
         stage:
           $ref: '#/components/schemas/TaskStatus'
+          description: Current processing stage, exposed separately so workflow progress can be tracked.
         storyboard:
           $ref: '#/components/schemas/Storyboard'
+          description: Music Video storyboard metadata when available.
         created_at:
           type: integer
+          description: Unix timestamp when BeatAPI accepted the task.
         updated_at:
           type: integer
+          description: Unix timestamp of the latest task update.
         completed_at:
           type: [integer, 'null']
+          description: Terminal Unix timestamp, or null while work is in progress.
         output:
           description: Output is null until the task succeeds.
           oneOf:
@@ -279,54 +405,129 @@ components:
               properties:
                 media:
                   type: array
+                  description: BeatAPI-hosted result assets.
                   items:
                     type: object
                     required: [type, url, mime_type]
                     properties:
                       type:
                         type: string
-                        enum: [video]
+                        enum: [image, video]
+                        description: Result asset type.
                       url:
                         type: string
                         format: uri
+                        description: BeatAPI-hosted HTTPS result URL.
                       mime_type:
                         type: string
-                        example: video/mp4
+                        description: Result asset MIME type.
+                        examples: [video/mp4, image/png, image/jpeg, image/webp]
                 r2_url:
                   type: string
                   format: uri
+                  description: Primary BeatAPI-hosted result URL for clients that need one canonical asset.
         usage:
           $ref: '#/components/schemas/TaskUsage'
+          description: USD reservation, settlement, refund, and optional billable duration for this task.
         request_id:
           type: string
+          description: Correlation ID to retain for logs and BeatAPI support.
           example: req_abc123
         error_code:
           type: [string, 'null']
+          description: Machine-readable terminal failure code, or null when no task failure is recorded.
           example: processing_timeout
         error_message:
           type: [string, 'null']
+          description: Human-readable terminal failure detail, or null when no task failure is recorded.
+    Effect:
+      type: object
+      required: [id, object, name, description, output_type, category, tags, input, options, preview, version, status]
+      properties:
+        id: { type: string, example: video-muscle-max }
+        object: { type: string, enum: [effect] }
+        name: { type: string, example: Muscle Transformation }
+        description: { type: string }
+        output_type: { type: string, enum: [image, video] }
+        category: { type: string, example: transformation }
+        tags: { type: array, items: { type: string } }
+        input:
+          type: object
+          required: [images_min, images_max, accepted_types]
+          properties:
+            images_min: { type: integer, minimum: 1 }
+            images_max: { type: integer, minimum: 1 }
+            accepted_types:
+              type: array
+              items: { type: string, enum: [image/jpeg, image/png, image/webp] }
+            max_size_mb:
+              type: integer
+              minimum: 1
+              description: Maximum downloaded bytes per input image. When omitted, BeatAPI enforces 50 MB.
+            max_dimension_px:
+              type: integer
+              minimum: 1
+              description: Maximum decoded width or height. BeatAPI inspects the actual image header before charging.
+            subject_requirements: { type: array, items: { type: string } }
+        options:
+          type: object
+          properties:
+            aspect_ratios: { type: array, items: { type: string } }
+            resolutions: { type: array, items: { type: string } }
+            duration_seconds: { type: array, items: { type: integer } }
+            bgm: { type: boolean }
+            seed: { type: boolean }
+        preview:
+          type: object
+          required: [cover_url, media_url]
+          properties:
+            cover_url: { type: [string, 'null'], format: uri }
+            media_url: { type: [string, 'null'], format: uri }
+        version: { type: integer, minimum: 1 }
+        status: { type: string, enum: [testing, active, paused] }
+    EffectResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Effect' }
+    EffectListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [object, data]
+          properties:
+            object: { type: string, enum: [list] }
+            data: { type: array, items: { $ref: '#/components/schemas/Effect' } }
     File:
       type: object
       required: [id, object, url, key, mime_type, size_bytes, purpose, created_at]
       properties:
         id:
           type: string
+          description: Stable uploaded file ID.
           example: file_3xYz9
         object:
           type: string
           enum: [file]
+          description: Object discriminator; always `file`.
         url:
           type: string
           format: uri
+          description: Long-lived BeatAPI HTTPS URL to use in workflow or model requests.
           example: https://media.beatapi.io/inputs/file_3xYz9.mp3
         key:
           type: string
+          description: BeatAPI storage key for support and diagnostics.
           example: inputs/file_3xYz9.mp3
         mime_type:
           type: string
+          description: Accepted MIME type detected for the uploaded file.
           example: audio/mpeg
         size_bytes:
           type: integer
+          description: Uploaded file size in bytes.
           example: 1048576
         audio_duration_seconds:
           type: number
@@ -339,8 +540,10 @@ components:
         purpose:
           type: string
           enum: [input]
+          description: File purpose; currently always `input`.
         created_at:
           type: integer
+          description: Unix timestamp when the file was stored.
           example: 1782210000
     WebhookEndpoint:
       type: object
@@ -348,33 +551,41 @@ components:
       properties:
         id:
           type: string
+          description: Stable webhook endpoint ID used for get, update, and delete operations.
           example: wh_9aBcD
         object:
           type: string
           enum: [webhook_endpoint]
+          description: Object discriminator; always `webhook_endpoint`.
         url:
           type: string
           format: uri
+          description: Public HTTPS callback URL receiving subscribed task events.
           example: https://example.com/beatapi-webhook
         description:
           type: string
+          description: Account-defined label for the endpoint.
           example: Production webhook
         events:
           type: array
+          description: Task event types delivered to this endpoint.
           items:
             type: string
             enum: [task.succeeded, task.failed]
         status:
           type: string
           enum: [active, disabled]
+          description: Delivery status. Disabled endpoints do not receive events.
         secret:
           type: string
           description: Returned in full only when the endpoint is created. Later responses return a masked value.
           example: whsec_example_masked
         created_at:
           type: integer
+          description: Unix timestamp when the endpoint was created.
         updated_at:
           type: integer
+          description: Unix timestamp when the endpoint last changed.
     WebhookEvent:
       type: object
       required: [id, event, created_at, data]
@@ -406,28 +617,340 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/WorkflowList'
+    GenerationModel:
+      type: object
+      additionalProperties: false
+      required: [id, object, name, media_type, input_modes]
+      properties:
+        id:
+          type: string
+          enum: [nano-banana, nano-banana-pro, gpt-image-2, seedream-5-pro, minimax-h3, seedance-2, seedance-2-fast, seedance-2-mini, veo-3.1, seedance-2.5, kling-3]
+        object: { type: string, enum: [generation_model] }
+        name: { type: string }
+        media_type: { type: string, enum: [image, video] }
+        input_modes:
+          type: array
+          items: { type: string, enum: [text, image, frames, reference] }
+    GenerationModelList:
+      type: object
+      required: [object, data]
+      properties:
+        object: { type: string, enum: [list] }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/GenerationModel' }
+    GenerationModelListResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/GenerationModelList' }
+    ImageGenerationTaskCreateRequest:
+      oneOf:
+        - $ref: '#/components/schemas/NanoBananaImageRequest'
+        - $ref: '#/components/schemas/NanoBananaProImageRequest'
+        - $ref: '#/components/schemas/GptImage2Request'
+        - $ref: '#/components/schemas/Seedream5ProImageRequest'
+      discriminator:
+        propertyName: model
+        mapping:
+          nano-banana: '#/components/schemas/NanoBananaImageRequest'
+          nano-banana-pro: '#/components/schemas/NanoBananaProImageRequest'
+          gpt-image-2: '#/components/schemas/GptImage2Request'
+          seedream-5-pro: '#/components/schemas/Seedream5ProImageRequest'
+    NanoBananaImageRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      properties:
+        model: { type: string, const: nano-banana, description: Must be `nano-banana`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Generation instructions. }
+        aspect_ratio:
+          type: string
+          enum: ['1:1', '9:16', '16:9', '3:4', '4:3', '3:2', '2:3', '5:4', '4:5', '21:9', auto]
+          default: '1:1'
+          description: Output image aspect ratio.
+        output_format: { type: string, enum: [png, jpeg], default: png, description: Output image file format. }
+    NanoBananaProImageRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      properties:
+        model: { type: string, const: nano-banana-pro, description: Must be `nano-banana-pro`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Generation or image-editing instructions. }
+        images:
+          type: array
+          minItems: 1
+          maxItems: 8
+          description: Public HTTPS reference-image URLs. Omit for text-to-image.
+          items: { type: string, format: uri, pattern: '^https://' }
+        aspect_ratio:
+          type: string
+          enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9', auto]
+          default: '1:1'
+          description: Output image aspect ratio.
+        resolution: { type: string, enum: [1K, 2K, 4K], default: 1K, description: Output resolution tier. }
+        output_format: { type: string, enum: [png, jpg], default: png, description: Output image file format. }
+    GptImage2Request:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      description: |
+        `auto` only supports 1K. `1:1` does not support 4K. At 2K/4K,
+        `5:4`, `4:5`, `3:1`, `1:3`, and `9:21` are unavailable.
+      properties:
+        model: { type: string, const: gpt-image-2, description: Must be `gpt-image-2`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Generation or image-editing instructions. }
+        images:
+          type: array
+          minItems: 1
+          maxItems: 16
+          description: Public HTTPS reference-image URLs. Omit for text-to-image.
+          items: { type: string, format: uri, pattern: '^https://' }
+        aspect_ratio:
+          type: string
+          enum: [auto, '1:1', '3:2', '2:3', '4:3', '3:4', '5:4', '4:5', '16:9', '9:16', '2:1', '1:2', '3:1', '1:3', '21:9', '9:21']
+          default: auto
+          description: Output image aspect ratio. Availability also depends on resolution.
+        resolution: { type: string, enum: [1K, 2K, 4K], default: 1K, description: Output resolution tier. }
+    Seedream5ProImageRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      properties:
+        model: { type: string, const: seedream-5-pro, description: Must be `seedream-5-pro`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Generation or image-editing instructions. }
+        images:
+          type: array
+          minItems: 1
+          maxItems: 10
+          description: Public HTTPS reference-image URLs. Omit for text-to-image.
+          items: { type: string, format: uri, pattern: '^https://' }
+        aspect_ratio:
+          type: string
+          enum: [auto, '1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '21:9']
+          default: '1:1'
+          description: Output image aspect ratio.
+        resolution: { type: string, enum: [1K, 2K], default: 1K, description: Output resolution tier. }
+        output_format: { type: string, enum: [png, jpeg], default: png, description: Output image file format. }
+    VideoGenerationTaskCreateRequest:
+      oneOf:
+        - $ref: '#/components/schemas/MinimaxH3VideoRequest'
+        - $ref: '#/components/schemas/Seedance2VideoRequest'
+        - $ref: '#/components/schemas/Seedance2FastVideoRequest'
+        - $ref: '#/components/schemas/Seedance2MiniVideoRequest'
+        - $ref: '#/components/schemas/Veo31VideoRequest'
+        - $ref: '#/components/schemas/Seedance25VideoRequest'
+        - $ref: '#/components/schemas/Kling3VideoRequest'
+      discriminator:
+        propertyName: model
+        mapping:
+          minimax-h3: '#/components/schemas/MinimaxH3VideoRequest'
+          seedance-2: '#/components/schemas/Seedance2VideoRequest'
+          seedance-2-fast: '#/components/schemas/Seedance2FastVideoRequest'
+          seedance-2-mini: '#/components/schemas/Seedance2MiniVideoRequest'
+          veo-3.1: '#/components/schemas/Veo31VideoRequest'
+          seedance-2.5: '#/components/schemas/Seedance25VideoRequest'
+          kling-3: '#/components/schemas/Kling3VideoRequest'
+    MinimaxH3VideoRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      description: '`images` cannot be combined with any `reference_*` input.'
+      properties:
+        model: { type: string, const: minimax-h3, description: Must be `minimax-h3`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Video generation instructions. }
+        images: { type: array, minItems: 1, maxItems: 2, description: One first-frame image or first- and last-frame images as public HTTPS URLs., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_images: { type: array, minItems: 1, maxItems: 9, description: Public HTTPS image references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_videos: { type: array, minItems: 1, maxItems: 3, description: Public HTTPS video references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_audios: { type: array, minItems: 1, maxItems: 3, description: Public HTTPS audio references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        duration: { type: integer, minimum: 4, maximum: 15, default: 5, description: Requested output duration in seconds. }
+        aspect_ratio: { type: string, enum: [adaptive, '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], default: adaptive, description: Output video aspect ratio. }
+        resolution: { type: string, enum: [768P, 2K], default: 768P, description: Output resolution tier. }
+    Seedance2VideoRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      description: '`images` cannot be combined with any `reference_*` input. An audio reference also requires at least one reference image or video.'
+      properties:
+        model: { type: string, const: seedance-2, description: Must be `seedance-2`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Video generation instructions. }
+        images: { type: array, minItems: 1, maxItems: 2, description: One first-frame image or first- and last-frame images as public HTTPS URLs., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_images: { type: array, minItems: 1, maxItems: 9, description: Public HTTPS image references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_videos: { type: array, minItems: 1, maxItems: 3, description: Public HTTPS video references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_audios: { type: array, minItems: 1, maxItems: 3, description: Public HTTPS audio references. Audio also requires at least one reference image or video., items: { type: string, format: uri, pattern: '^https://' } }
+        duration: { type: integer, minimum: 4, maximum: 15, default: 5, description: Requested output duration in seconds. }
+        aspect_ratio: { type: string, enum: [adaptive, '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], default: adaptive, description: Output video aspect ratio. }
+        resolution: { type: string, enum: [480p, 720p, 1080p, 4k], default: 720p, description: Output resolution tier. }
+        generate_audio: { type: boolean, default: true, description: Generate synchronized audio with the video. }
+    Seedance2FastVideoRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      description: '`images` cannot be combined with any `reference_*` input. An audio reference also requires at least one reference image or video.'
+      properties:
+        model: { type: string, const: seedance-2-fast, description: Must be `seedance-2-fast`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Video generation instructions. }
+        images: { type: array, minItems: 1, maxItems: 2, description: One first-frame image or first- and last-frame images as public HTTPS URLs., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_images: { type: array, minItems: 1, maxItems: 9, description: Public HTTPS image references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_videos: { type: array, minItems: 1, maxItems: 3, description: Public HTTPS video references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_audios: { type: array, minItems: 1, maxItems: 3, description: Public HTTPS audio references. Audio also requires at least one reference image or video., items: { type: string, format: uri, pattern: '^https://' } }
+        duration: { type: integer, minimum: 4, maximum: 15, default: 5, description: Requested output duration in seconds. }
+        aspect_ratio: { type: string, enum: [adaptive, '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], default: adaptive, description: Output video aspect ratio. }
+        resolution: { type: string, enum: [480p, 720p], default: 720p, description: Output resolution tier. }
+        generate_audio: { type: boolean, default: true, description: Generate synchronized audio with the video. }
+    Seedance2MiniVideoRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      description: 'Low-cost Seedance 2.0 route. `images` cannot be combined with any `reference_*` input. Generated audio is not supported.'
+      properties:
+        model: { type: string, const: seedance-2-mini, description: Must be `seedance-2-mini`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Video generation instructions. }
+        images: { type: array, minItems: 1, maxItems: 2, description: One first-frame image or first- and last-frame images as public HTTPS URLs., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_images: { type: array, minItems: 1, maxItems: 9, description: Public HTTPS image references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_videos: { type: array, minItems: 1, maxItems: 3, description: Public HTTPS video references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_audios: { type: array, minItems: 1, maxItems: 3, description: Public HTTPS audio references. Audio also requires at least one reference image or video., items: { type: string, format: uri, pattern: '^https://' } }
+        duration: { type: integer, minimum: 4, maximum: 15, default: 5, description: Requested output duration in seconds. }
+        aspect_ratio: { type: string, enum: [adaptive, '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], default: adaptive, description: Output video aspect ratio. }
+        resolution: { type: string, enum: [480p, 720p], default: 720p, description: Output resolution tier. }
+    Veo31VideoRequest:
+      allOf:
+        - oneOf:
+            - $ref: '#/components/schemas/Veo31TextOrFrameVideoRequest'
+            - $ref: '#/components/schemas/Veo31ReferenceVideoRequest'
+    Veo31TextOrFrameVideoRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      description: |
+        Veo 3.1 text or first/last-frame generation. Output is fixed at 8 seconds
+        and defaults to the Quality tier.
+      properties:
+        model: { type: string, const: veo-3.1, description: Must be `veo-3.1`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Video generation instructions. }
+        images: { type: array, minItems: 1, maxItems: 2, description: One first-frame image or first- and last-frame images as public HTTPS URLs., items: { type: string, format: uri, pattern: '^https://' } }
+        aspect_ratio: { type: string, enum: ['16:9', '9:16', auto], default: '16:9', description: Output video aspect ratio. }
+        quality: { type: string, enum: [Quality, Fast, Lite], default: Quality, description: Text or frame generation tier. }
+        watermark: { type: string, description: Optional watermark text forwarded to the selected model. }
+        enable_translation: { type: boolean, description: Allow prompt translation before generation. }
+    Veo31ReferenceVideoRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt, reference_images]
+      description: |
+        Veo 3.1 reference-image generation. Output is fixed at 8 seconds and
+        supports the Fast or Lite tier, defaulting to Fast.
+      properties:
+        model: { type: string, const: veo-3.1, description: Must be `veo-3.1`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Video generation instructions. }
+        reference_images: { type: array, minItems: 1, maxItems: 3, description: Public HTTPS reference images., items: { type: string, format: uri, pattern: '^https://' } }
+        aspect_ratio: { type: string, enum: ['16:9', '9:16', auto], default: '16:9', description: Output video aspect ratio. }
+        quality: { type: string, enum: [Fast, Lite], default: Fast, description: Reference-image generation tier. }
+        watermark: { type: string, description: Optional watermark text forwarded to the selected model. }
+        enable_translation: { type: boolean, description: Allow prompt translation before generation. }
+    Seedance25VideoRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      description: '`images` cannot be combined with any `reference_*` input. An audio reference also requires at least one reference image or video.'
+      properties:
+        model: { type: string, const: seedance-2.5, description: Must be `seedance-2.5`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Video generation instructions. }
+        images: { type: array, minItems: 1, maxItems: 2, description: One first-frame image or first- and last-frame images as public HTTPS URLs., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_images: { type: array, minItems: 1, maxItems: 30, description: Public HTTPS image references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_videos: { type: array, minItems: 1, maxItems: 10, description: Public HTTPS video references for multimodal reference generation., items: { type: string, format: uri, pattern: '^https://' } }
+        reference_audios: { type: array, minItems: 1, maxItems: 10, description: Public HTTPS audio references. Audio also requires at least one reference image or video., items: { type: string, format: uri, pattern: '^https://' } }
+        duration: { type: integer, minimum: 4, maximum: 30, default: 5, description: Requested output duration in seconds. }
+        aspect_ratio: { type: string, enum: [adaptive, '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], default: adaptive, description: Output video aspect ratio. }
+        resolution: { type: string, const: 720p, default: 720p, description: Seedance 2.5 currently returns 720p output. }
+        generate_audio: { type: boolean, default: true, description: Generate synchronized audio with the video. }
+        seed: { type: integer, minimum: -1, maximum: 4294967295, default: -1, description: Reproducibility seed. Use -1 for a random seed. }
+    KlingShot:
+      type: object
+      additionalProperties: false
+      required: [prompt, duration]
+      properties:
+        prompt: { type: string, minLength: 1, maxLength: 500, description: Instructions for this shot. }
+        duration: { type: integer, minimum: 1, maximum: 12, description: Shot duration in seconds. All shot durations must sum to the task duration. }
+    KlingElement:
+      type: object
+      additionalProperties: false
+      required: [name, element_input_urls]
+      description: Use 2-4 image URLs or one video URL. A video element may include one audio URL and a 3-8 second segment in milliseconds.
+      properties:
+        name: { type: string, minLength: 1, description: Stable name used to reference this element in the prompt. }
+        description: { type: string, description: Optional description of the subject or object. }
+        element_input_urls:
+          type: array
+          minItems: 1
+          maxItems: 4
+          description: Two to four image URLs, or one video URL.
+          items: { type: string, format: uri, pattern: '^https://' }
+        element_input_audio_urls:
+          type: array
+          minItems: 1
+          maxItems: 1
+          description: Optional audio URL used with a video element.
+          items: { type: string, format: uri, pattern: '^https://' }
+        start_time: { type: integer, minimum: 0, maximum: 30000, description: Video element segment start time in milliseconds. }
+        end_time: { type: integer, minimum: 0, maximum: 30000, description: Video element segment end time in milliseconds. The segment must be 3-8 seconds. }
+    Kling3VideoRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      description: Multi-shot mode accepts one first-frame image, requires `multi_prompt`, and defaults sound to true. Shot durations must sum to `duration`.
+      properties:
+        model: { type: string, const: kling-3, description: Must be `kling-3`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Video generation instructions. }
+        images: { type: array, minItems: 1, maxItems: 2, description: One first-frame image or first- and last-frame images as public HTTPS URLs. Multi-shot mode accepts exactly one., items: { type: string, format: uri, pattern: '^https://' } }
+        duration: { type: integer, minimum: 3, maximum: 15, default: 5, description: Requested output duration in seconds. }
+        aspect_ratio:
+          type: string
+          enum: ['16:9', '9:16', '1:1']
+          description: Defaults to 16:9 for text generation. Omit it with frame images to adapt to the input aspect ratio.
+        resolution: { type: string, enum: [std, pro, 4K], default: pro, description: Output quality tier. }
+        sound: { type: boolean, description: Generate synchronized sound. Defaults to true in multi-shot mode. }
+        multi_shots: { type: boolean, default: false, description: Enable storyboard-style multi-shot generation. }
+        multi_prompt:
+          type: array
+          minItems: 1
+          maxItems: 5
+          description: Shot definitions required when `multi_shots=true`.
+          items: { $ref: '#/components/schemas/KlingShot' }
+        elements:
+          type: array
+          maxItems: 3
+          description: Up to three reusable subject or object references.
+          items: { $ref: '#/components/schemas/KlingElement' }
     TaskResponse:
       type: object
       required: [data]
       properties:
         data:
           $ref: '#/components/schemas/Task'
+          description: Accepted or current BeatAPI task state.
     Usage:
       type: object
-      required: [object, credit_balance, total_tasks, credits_settled, credits_refunded, concurrency, by_workflow]
+      required: [object, credit_balance, total_tasks, credits_settled, credits_refunded, concurrency, by_workflow, by_capability, by_model, by_api_key]
       properties:
         object:
           type: string
           enum: [usage]
         credit_balance:
-          type: integer
-          description: Current credit balance. It may be negative.
+          type: number
+          format: double
+          multipleOf: 0.01
+          description: Current USD balance. The compatibility field name is retained; 1 Credit equals $1 USD. The balance may be negative.
         total_tasks:
           type: integer
         credits_settled:
-          type: integer
+          type: number
+          format: double
+          multipleOf: 0.01
         credits_refunded:
-          type: integer
+          type: number
+          format: double
+          multipleOf: 0.01
         concurrency:
           type: object
           required: [limit, active]
@@ -437,9 +960,10 @@ components:
               example: 2
             active:
               type: integer
-              description: Active processing tasks currently using BeatAPI processing resources. Music Video storyboard_ready and requires_action tasks can have settled credits without counting toward this value.
+              description: Active processing tasks currently using BeatAPI processing resources. Music Video storyboard_ready and requires_action tasks can have settled USD usage without counting toward this value.
         by_workflow:
           type: array
+          description: Compatibility view containing workflow tasks only. Image, video, and Effect tasks are reported under by_capability instead.
           items:
             type: object
             required: [workflow, tasks, credits_settled]
@@ -450,7 +974,54 @@ components:
               tasks:
                 type: integer
               credits_settled:
+                type: number
+                format: double
+                multipleOf: 0.01
+        by_capability:
+          type: array
+          items:
+            type: object
+            required: [task_kind, capability_id, tasks, credits_settled]
+            properties:
+              task_kind:
+                type: string
+                enum: [workflow, effect, image, video]
+              capability_id:
+                type: string
+              tasks:
                 type: integer
+              credits_settled:
+                type: number
+                format: double
+                multipleOf: 0.01
+        by_model:
+          type: array
+          items:
+            type: object
+            required: [media_type, model, tasks, credits_settled]
+            properties:
+              media_type:
+                type: string
+                enum: [image, video]
+              model:
+                type: string
+              tasks:
+                type: integer
+              credits_settled:
+                type: number
+                format: double
+                multipleOf: 0.01
+        by_api_key:
+          type: array
+          items:
+            type: object
+            required: [api_key_id, title, key_prefix, tasks, credits_settled]
+            properties:
+              api_key_id: { type: string }
+              title: { type: string }
+              key_prefix: { type: string }
+              tasks: { type: integer }
+              credits_settled: { type: number, format: double, multipleOf: 0.01 }
         realtime:
           type: object
           required: [sessions, credits, active]
@@ -459,8 +1030,10 @@ components:
               type: integer
               description: Total BeatAPI realtime sessions for this account.
             credits:
-              type: integer
-              description: Credits settled by connected realtime sessions.
+              type: number
+              format: double
+              multipleOf: 0.01
+              description: USD amount settled by connected realtime sessions.
             active:
               type: integer
               description: Realtime sessions in ready, connecting, or active state.
@@ -470,6 +1043,213 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/Usage'
+    MusicVideoTaskCreateRequest:
+      oneOf:
+        - $ref: '#/components/schemas/StandardMusicVideoTaskCreateRequest'
+        - $ref: '#/components/schemas/PremiumMusicVideoTaskCreateRequest'
+      discriminator:
+        propertyName: mv_tier
+        mapping:
+          standard: '#/components/schemas/StandardMusicVideoTaskCreateRequest'
+          premium: '#/components/schemas/PremiumMusicVideoTaskCreateRequest'
+    StandardMusicVideoTaskCreateRequest:
+      type: object
+      required: [images, audio_url]
+      allOf:
+        - if:
+            required: [lip_sync]
+            properties:
+              lip_sync: { const: true }
+          then:
+            required: [lip_ref_url]
+            properties:
+              lip_ref_url: {}
+      not:
+        anyOf:
+          - required: [mv_mode]
+            properties: { mv_mode: {} }
+          - required: [lip_ref_urls]
+            properties: { lip_ref_urls: {} }
+      properties:
+        mv_tier:
+          type: string
+          enum: [standard]
+          default: standard
+          description: May be omitted to preserve the backwards-compatible Standard contract.
+        images:
+          type: array
+          minItems: 1
+          maxItems: 7
+          description: Standard scene images. Provide 1-7 public HTTPS PNG, JPEG, or WebP URLs; place the primary subject or opening scene first. Upload local files through `POST /v1/files` and use the returned `data.url`.
+          items: { type: string, format: uri }
+        audio_url:
+          type: string
+          format: uri
+          description: Public HTTPS audio URL; Standard audio must be 10-180 seconds.
+        prompt: { type: string, maxLength: 3000, description: "Optional creative direction for story, setting, performance, camera, lighting, and pacing. Maximum 3000 characters." }
+        language: { type: string, enum: [en, zh], description: Dialogue and lyric language used by the Standard workflow. }
+        quality: { type: string, enum: [standard, high], default: standard, description: Generation quality tier. High quality is unavailable at 540p. }
+        style: { type: string, maxLength: 200, description: "Optional concise visual style, such as cinematic, anime, documentary, or fashion editorial." }
+        aspect_ratio: { type: string, enum: ['1:1', '16:9', '9:16', '4:3', '3:4'], description: Target output placement. Set explicitly for the destination player or social feed. }
+        resolution: { type: string, enum: [540p, 720p, 1080p], default: 720p, description: Output resolution. 540p cannot be combined with high quality or lip sync. }
+        lip_sync:
+          type: boolean
+          default: false
+          description: Generate lip-synchronized performance. When true, `lip_ref_url` is required.
+        lip_ref_url:
+          type: string
+          format: uri
+          description: Public HTTPS close-up, front-facing face image used for Standard lip sync.
+        add_subtitle: { type: boolean, default: false, description: Burn generated or supplied subtitles into the final video. }
+        subtitle_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$', example: '#FFFFFF', description: Subtitle text color as a six-digit hexadecimal value. Used when subtitles are enabled. }
+        srt_url: { type: string, format: uri, description: Optional public HTTPS `.srt` subtitle file. Upload a local subtitle through `POST /v1/files`. }
+        duration:
+          type: integer
+          minimum: 10
+          maximum: 180
+          description: Billing fallback only; detected audio duration wins.
+        compose_mode:
+          type: string
+          enum: [auto, manual]
+          default: auto
+          description: Auto composes the final Music Video; manual pauses at `requires_action` so shots can be reviewed or edited before compose.
+    PremiumMusicVideoTaskCreateRequest:
+      allOf:
+        - oneOf:
+            - $ref: '#/components/schemas/PremiumMusicVideoSingTaskCreateRequest'
+            - $ref: '#/components/schemas/PremiumMusicVideoSingPerformTaskCreateRequest'
+            - $ref: '#/components/schemas/PremiumMusicVideoDanceTaskCreateRequest'
+            - $ref: '#/components/schemas/PremiumMusicVideoPerformTaskCreateRequest'
+      discriminator:
+        propertyName: mv_mode
+        mapping:
+          sing: '#/components/schemas/PremiumMusicVideoSingTaskCreateRequest'
+          sing_perform: '#/components/schemas/PremiumMusicVideoSingPerformTaskCreateRequest'
+          dance: '#/components/schemas/PremiumMusicVideoDanceTaskCreateRequest'
+          perform: '#/components/schemas/PremiumMusicVideoPerformTaskCreateRequest'
+    PremiumMusicVideoTaskRequestBase:
+      type: object
+      required: [mv_tier, mv_mode, audio_url]
+      not:
+        anyOf:
+          - required: [quality]
+            properties: { quality: {} }
+          - required: [language]
+            properties: { language: {} }
+          - required: [lip_sync]
+            properties: { lip_sync: {} }
+          - required: [lip_ref_url]
+            properties: { lip_ref_url: {} }
+          - required: [srt_url]
+            properties: { srt_url: {} }
+          - required: [compose_mode]
+            properties: { compose_mode: {} }
+      properties:
+        mv_tier: { type: string, enum: [premium], description: Selects the Premium Music Video workflow and its mode-specific inputs. }
+        mv_mode: { type: string, enum: [sing, sing_perform, dance, perform], description: Premium performance mode. Sing modes require `lip_ref_urls`; dance and perform require exactly six `images`. }
+        audio_url:
+          type: string
+          format: uri
+          description: Public HTTPS audio URL; Premium audio must be 10-300 seconds.
+        prompt: { type: string, maxLength: 3000, description: "Optional creative direction for story, setting, performance, camera, lighting, and pacing. Maximum 3000 characters." }
+        style: { type: string, maxLength: 200 }
+        aspect_ratio: { type: string, enum: ['1:1', '16:9', '9:16', '4:3', '3:4'], description: Target output placement. Set explicitly for the destination player or social feed. }
+        resolution:
+          type: string
+          enum: [720p]
+          default: 720p
+          description: Premium output is fixed to 720p.
+        add_subtitle: { type: boolean, default: false, description: Burn generated subtitles into the final video. }
+        subtitle_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$', example: '#FFFFFF', description: Subtitle text color as a six-digit hexadecimal value. Used when subtitles are enabled. }
+        duration:
+          type: integer
+          minimum: 10
+          maximum: 300
+          description: Premium billing fallback only; detected audio duration wins.
+    PremiumMusicVideoSingTaskCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/PremiumMusicVideoTaskRequestBase'
+        - type: object
+          required: [lip_ref_urls]
+          properties:
+            mv_mode: { type: string, enum: [sing] }
+            images:
+              type: array
+              minItems: 0
+              maxItems: 6
+              description: Optional Premium scene images for sing mode. Provide up to six public HTTPS PNG, JPEG, or WebP URLs.
+              items: { type: string, format: uri }
+            lip_ref_urls:
+              type: array
+              minItems: 1
+              maxItems: 2
+              description: Required for sing mode. One or two public HTTPS close-up, front-facing face images for lip synchronization.
+              items: { type: string, format: uri }
+    PremiumMusicVideoSingPerformTaskCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/PremiumMusicVideoTaskRequestBase'
+        - type: object
+          required: [lip_ref_urls]
+          properties:
+            mv_mode: { type: string, enum: [sing_perform] }
+            images:
+              type: array
+              minItems: 0
+              maxItems: 6
+              description: Optional Premium scene images for sing and perform mode. Provide up to six public HTTPS PNG, JPEG, or WebP URLs.
+              items: { type: string, format: uri }
+            lip_ref_urls:
+              type: array
+              minItems: 1
+              maxItems: 2
+              description: Required for sing and perform mode. One or two public HTTPS close-up, front-facing face images for lip synchronization.
+              items: { type: string, format: uri }
+    PremiumMusicVideoDanceTaskCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/PremiumMusicVideoTaskRequestBase'
+        - type: object
+          required: [images]
+          not:
+            required: [lip_ref_urls]
+            properties: { lip_ref_urls: {} }
+          properties:
+            mv_mode: { type: string, enum: [dance] }
+            images:
+              type: array
+              minItems: 6
+              maxItems: 6
+              description: Required for dance mode. Provide exactly six public HTTPS PNG, JPEG, or WebP scene images.
+              items: { type: string, format: uri }
+    PremiumMusicVideoPerformTaskCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/PremiumMusicVideoTaskRequestBase'
+        - type: object
+          required: [images]
+          not:
+            required: [lip_ref_urls]
+            properties: { lip_ref_urls: {} }
+          properties:
+            mv_mode: { type: string, enum: [perform] }
+            images:
+              type: array
+              minItems: 6
+              maxItems: 6
+              description: Required for perform mode. Provide exactly six public HTTPS PNG, JPEG, or WebP scene images.
+              items: { type: string, format: uri }
+    EditMusicVideoShotRequest:
+      type: object
+      additionalProperties: false
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+          maxLength: 3000
+        images:
+          type: array
+          minItems: 0
+          maxItems: 6
+          description: Premium tasks only. Optional replacement scene images; an empty array is treated as omitted. Standard tasks reject this field.
+          items: { type: string, format: uri }
     RealtimeSession:
       type: object
       required: [id, object, status, expires_at, max_duration_seconds, allowed_origins, credits, request_id, created_at, connected_at, closed_at]
@@ -477,41 +1257,66 @@ components:
         id:
           type: string
           pattern: '^rts_'
+          description: Stable Realtime Session ID used to inspect or close the session.
         object:
           type: string
           enum: [realtime.session]
+          description: Object discriminator; always `realtime.session`.
         status:
           type: string
           enum: [ready, connecting, active, closed, failed, expired]
           description: Active means BeatAPI accepted the first billing heartbeat after remote output began.
-        client_secret:
-          type: string
-          description: Returned only by POST. Give this short-lived BeatAPI secret to the browser SDK; never give the browser an sk_ API key.
-          pattern: '^brt_live_'
         expires_at:
           type: string
           format: date-time
+          description: Time when the unconnected short-lived session credential expires.
         max_duration_seconds:
           type: integer
           enum: [15, 60, 300]
+          description: Maximum selected live duration and billing tier in seconds.
         allowed_origins:
           type: array
-          items: { type: string, format: uri }
+          description: Exact browser origins authorized to use this Session.
+          items:
+            type: string
+            format: uri
+            pattern: '^(https://[A-Za-z0-9.-]+(?::[0-9]+)?|http://(?:localhost|127\\.0\\.0\\.1|\\[::1\\])(?::[0-9]+)?)$'
+            description: Exact browser origin. Use HTTPS in production; HTTP is accepted only for localhost development.
+            example: https://app.example.com
         credits:
           type: object
           required: [reserved, settled, refunded]
+          description: USD reservation, settlement, and refund lifecycle for this Realtime Session. Compatibility field names are retained.
           properties:
-            reserved: { type: integer }
-            settled: { type: integer }
-            refunded: { type: integer }
+            reserved: { type: number, format: double, multipleOf: 0.01, description: USD amount reserved when the Session is created. }
+            settled: { type: number, format: double, multipleOf: 0.01, description: USD amount settled after the first accepted billing heartbeat. }
+            refunded: { type: number, format: double, multipleOf: 0.01, description: USD amount refunded if the Session ends without billing activation. }
         request_id:
           type: string
-        created_at: { type: string, format: date-time }
+          description: Correlation ID to retain for logs and BeatAPI support.
+        created_at: { type: string, format: date-time, description: Time when the Session was created. }
         connected_at:
           type: [string, 'null']
           format: date-time
           description: Time of the first accepted BeatAPI billing heartbeat; null before billing activation.
-        closed_at: { type: [string, 'null'], format: date-time }
+        closed_at: { type: [string, 'null'], format: date-time, description: "Time when the Session closed, or null while it remains open." }
+    RealtimeSessionCreated:
+      allOf:
+        - $ref: '#/components/schemas/RealtimeSession'
+        - type: object
+          required: [client_secret]
+          properties:
+            client_secret:
+              type: string
+              description: Short-lived BeatAPI browser credential returned only by POST. Never expose an sk_ API key to the browser.
+              pattern: '^brt_live_'
+    RealtimeSessionCreateResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/RealtimeSessionCreated'
+          description: Created Realtime Session including the one-time short-lived browser credential.
     RealtimeSessionResponse:
       type: object
       required: [data]
@@ -524,6 +1329,7 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/File'
+          description: Uploaded file metadata and the public HTTPS URL to use in later requests.
     WebhookEndpointList:
       type: object
       required: [object, data]
@@ -547,6 +1353,7 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/WebhookEndpoint'
+          description: Created or retrieved webhook endpoint. Public API responses return the full signing secret at creation and mask it afterward; authenticated dashboard owners can explicitly reveal it again.
     DeleteResponse:
       type: object
       required: [data]
@@ -565,10 +1372,12 @@ components:
       properties:
         error:
           type: object
+          description: Structured BeatAPI error. Use `code` for program logic and retain `request_id` for support.
           required: [code, message, request_id]
           properties:
             code:
               type: string
+              description: Stable machine-readable error code.
               enum:
                 - bad_request
                 - unauthorized
@@ -578,6 +1387,7 @@ components:
                 - idempotency_conflict
                 - user_concurrency_exceeded
                 - rate_limit_exceeded
+                - content_policy_violation
                 - processing_unavailable
                 - processing_failed
                 - processing_timeout
@@ -592,8 +1402,10 @@ components:
                 - internal_error
             message:
               type: string
+              description: Human-readable detail intended for logs and debugging.
             request_id:
               type: string
+              description: Correlation ID to retain for BeatAPI support.
             retry_after_seconds:
               type: integer
               description: Present on retryable rate-limit or capacity responses when the client should wait before retrying.
@@ -637,6 +1449,28 @@ components:
               message: Too many polling requests. Poll every 5-10 seconds.
               request_id: req_xxx
               retry_after_seconds: 12
+    InternalError:
+      description: BeatAPI could not complete the request because of an internal or storage failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: Internal error. Contact support with the request_id if the problem continues.
+              request_id: req_xxx
+    ProcessingUnavailable:
+      description: BeatAPI processing is temporarily unavailable or did not complete within the processing window.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: processing_unavailable
+              message: Task processing is temporarily unavailable.
+              request_id: req_xxx
 paths:
   /v1/workflows:
     get:
@@ -667,47 +1501,445 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
 
+  /v1/media/models:
+    get:
+      operationId: listGenerationModels
+      tags: [Generation]
+      summary: List BeatAPI image and video generation models
+      description: Returns stable BeatAPI model aliases and public input modes. Internal execution routing is not part of this contract.
+      security: []
+      parameters:
+        - in: query
+          name: media_type
+          schema: { type: string, enum: [image, video] }
+      responses:
+        '200':
+          description: Generation model list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GenerationModelListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/images/tasks:
+    post:
+      operationId: createImageGenerationTask
+      tags: [Generation]
+      summary: Create an image generation task
+      description: |
+        Creates one asynchronous image task. Select the model-specific request
+        contract with `model`, save the returned `data.id`, and poll
+        `GET /v1/tasks/{task_id}` until the task succeeds or fails.
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ImageGenerationTaskCreateRequest' }
+            examples:
+              Nano Banana:
+                summary: Nano Banana
+                value:
+                  model: nano-banana
+                  prompt: Editorial product photograph on a warm stone pedestal.
+                  aspect_ratio: '1:1'
+                  output_format: png
+              Nano Banana Pro:
+                summary: Nano Banana Pro
+                value:
+                  model: nano-banana-pro
+                  prompt: Place the supplied product in a premium editorial studio scene.
+                  images: ['https://media.beatapi.io/samples/smart-bottle.png']
+                  aspect_ratio: '4:5'
+                  resolution: 2K
+                  output_format: png
+              GPT Image 2:
+                summary: GPT Image 2
+                value:
+                  model: gpt-image-2
+                  prompt: Create a clean campaign image from the supplied product reference.
+                  images: ['https://media.beatapi.io/samples/smart-bottle.png']
+                  aspect_ratio: '1:1'
+                  resolution: 2K
+              Seedream 5 Pro:
+                summary: Seedream 5 Pro
+                value:
+                  model: seedream-5-pro
+                  prompt: Recompose the product as a cinematic storefront campaign image.
+                  images: ['https://media.beatapi.io/samples/smart-bottle.png']
+                  aspect_ratio: '16:9'
+                  resolution: 2K
+                  output_format: png
+      responses:
+        '201':
+          description: Image generation task accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+              examples:
+                Nano Banana Pro:
+                  summary: Nano Banana Pro
+                  value:
+                    data:
+                      id: task_8K2qA
+                      object: task
+                      task_kind: image
+                      capability_id: nano-banana-pro
+                      capability_version: null
+                      media_type: image
+                      model: nano-banana-pro
+                      status: queued
+                      stage: queued
+                      created_at: 1782210000
+                      updated_at: 1782210000
+                      completed_at: null
+                      output: null
+                      usage:
+                        credits_reserved: 0.09
+                        credits_charged: 0.09
+                        credits_settled: 0
+                        credits_refunded: 0
+                      request_id: req_abc123
+                      error_code: null
+                      error_message: null
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { description: Insufficient USD balance, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Idempotency key conflicts with another request body, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/videos/tasks:
+    post:
+      operationId: createVideoGenerationTask
+      tags: [Generation]
+      summary: Create a video generation task
+      description: |
+        Creates one asynchronous video task. Select the model-specific request
+        contract with `model`, save the returned `data.id`, and poll
+        `GET /v1/tasks/{task_id}` until the task succeeds or fails.
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VideoGenerationTaskCreateRequest' }
+            examples:
+              MiniMax H3:
+                summary: MiniMax H3
+                value:
+                  model: minimax-h3
+                  prompt: A slow cinematic push through a misty mountain village at dawn.
+                  duration: 5
+                  aspect_ratio: '16:9'
+                  resolution: 768P
+              Seedance 2:
+                summary: Seedance 2
+                value:
+                  model: seedance-2
+                  prompt: A handheld tracking shot through a crowded neon night market.
+                  duration: 8
+                  aspect_ratio: '16:9'
+                  resolution: 1080p
+                  generate_audio: true
+              Seedance 2 Fast:
+                summary: Seedance 2 Fast
+                value:
+                  model: seedance-2-fast
+                  prompt: A fast cinematic production draft through a neon night market.
+                  duration: 5
+                  aspect_ratio: '16:9'
+                  resolution: 720p
+                  generate_audio: true
+              Seedance 2 Mini:
+                summary: Seedance 2 Mini
+                value:
+                  model: seedance-2-mini
+                  prompt: A low-cost storyboard draft for a product reveal.
+                  duration: 5
+                  aspect_ratio: '16:9'
+                  resolution: 720p
+              Veo 3.1 Quality:
+                summary: Veo 3.1 Quality
+                value:
+                  model: veo-3.1
+                  prompt: A cinematic aerial reveal of a quiet coastal village at sunrise.
+                  aspect_ratio: '16:9'
+                  quality: Quality
+              Veo 3.1 Fast:
+                summary: Veo 3.1 Fast
+                value:
+                  model: veo-3.1
+                  prompt: A fast cinematic product reveal with natural camera motion.
+                  aspect_ratio: '16:9'
+                  quality: Fast
+              Veo 3.1 Lite:
+                summary: Veo 3.1 Lite
+                value:
+                  model: veo-3.1
+                  prompt: A concise storyboard-ready product reveal.
+                  aspect_ratio: '16:9'
+                  quality: Lite
+              Veo 3.1 Reference Fast:
+                summary: Veo 3.1 Reference Fast
+                value:
+                  model: veo-3.1
+                  prompt: Create a cohesive cinematic scene using the supplied visual references.
+                  reference_images:
+                    - https://media.beatapi.io/samples/neon-singer.png
+                    - https://media.beatapi.io/samples/smart-bottle.png
+                  aspect_ratio: '16:9'
+                  quality: Fast
+              Seedance 2.5:
+                summary: Seedance 2.5
+                value:
+                  model: seedance-2.5
+                  prompt: A cinematic tracking shot through a rain-lit night market.
+                  duration: 5
+                  aspect_ratio: '16:9'
+                  resolution: 720p
+                  generate_audio: true
+                  seed: -1
+              Kling 3:
+                summary: Kling 3
+                value:
+                  model: kling-3
+                  prompt: A dramatic product reveal with a slow orbiting camera move.
+                  duration: 5
+                  aspect_ratio: '16:9'
+                  resolution: pro
+                  sound: true
+      responses:
+        '201':
+          description: Video generation task accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+              examples:
+                MiniMax H3:
+                  summary: MiniMax H3
+                  value:
+                    data:
+                      id: task_8K2qA
+                      object: task
+                      task_kind: video
+                      capability_id: minimax-h3
+                      capability_version: null
+                      media_type: video
+                      model: minimax-h3
+                      status: queued
+                      stage: queued
+                      created_at: 1782210000
+                      updated_at: 1782210000
+                      completed_at: null
+                      output: null
+                      usage:
+                        credits_reserved: 0.2
+                        credits_charged: 0.2
+                        billable_duration_seconds: 5
+                        credits_settled: 0
+                        credits_refunded: 0
+                      request_id: req_abc123
+                      error_code: null
+                      error_message: null
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { description: Insufficient USD balance, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Idempotency key conflicts with another request body, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/effects:
+    get:
+      operationId: listEffects
+      tags: [Effects]
+      summary: List active Effects
+      security: []
+      description: Returns only versioned Effects that have passed BeatAPI publication gates. Internal integration names, template ids, costs, and execution context are never exposed.
+      parameters:
+        - in: query
+          name: output_type
+          schema: { type: string, enum: [image, video] }
+        - in: query
+          name: category
+          schema: { type: string }
+      responses:
+        '200':
+          description: Active Effect catalog
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EffectListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/effects/{effect_id}:
+    get:
+      operationId: getEffect
+      tags: [Effects]
+      summary: Get an active Effect
+      security: []
+      parameters:
+        - in: path
+          name: effect_id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Effect definition and immutable current version contract
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EffectResponse' }
+        '404':
+          description: Effect is unknown or not currently published.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /v1/effects/tasks:
+    post:
+      operationId: createEffectTask
+      tags: [Effects]
+      summary: Create an Effect task
+      security: [{ BearerAuth: [] }]
+      description: |
+        Creates an asynchronous image or video Effect task. Read the catalog
+        first: image count, accepted input types, output resolution/duration,
+        and execution contract are fixed by the selected Effect version. Send
+        an `Idempotency-Key`; an exact replay returns the
+        accepted task before remote input URLs are revalidated, while a changed
+        body returns `idempotency_conflict`.
+
+        The USD amount is reserved atomically when accepted, settled on success, and
+        fully refunded after a definite processing failure. An uncertain create
+        result is not blindly retried and never switches integrations automatically.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [effect_id, images]
+              properties:
+                effect_id: { type: string, example: video-muscle-max, description: Stable published Effect ID from `GET /v1/effects`. }
+                effect_version:
+                  type: integer
+                  minimum: 1
+                  description: Optional immutable version. Omit to use the current published version.
+                images:
+                  type: array
+                  minItems: 1
+                  maxItems: 7
+                  description: Public HTTPS input images in the order required by the selected Effect version. Read `GET /v1/effects/{effect_id}` for the exact count and accepted media rules; upload local files with `POST /v1/files`.
+                  items: { type: string, format: uri }
+                options:
+                  type: object
+                  additionalProperties: false
+                  description: Optional controls supported by the selected Effect version. Omit unsupported controls; the catalog is the source of truth.
+                  properties:
+                    aspect_ratio: { type: string, description: Requested output aspect ratio when the selected Effect exposes this option. }
+                    resolution: { type: string, description: Requested output resolution when the selected Effect exposes this option. }
+                    duration: { type: integer, description: Requested video duration in seconds when the selected Effect exposes this option. }
+                    bgm: { type: boolean, description: Include background music when supported by the selected Effect. }
+                    seed: { type: integer, description: Optional deterministic seed when supported by the selected Effect. }
+            example:
+              effect_id: video-muscle-max
+              images: ['https://media.beatapi.io/samples/portrait.png']
+              options: { resolution: 720p, duration: 12 }
+      responses:
+        '201':
+          description: Effect task accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskResponse' }
+              example:
+                data:
+                  id: task_effect123
+                  object: task
+                  task_kind: effect
+                  capability_id: video-muscle-max
+                  capability_version: 1
+                  effect_id: video-muscle-max
+                  effect_version: 1
+                  status: queued
+                  stage: queued
+                  created_at: 1782210000
+                  updated_at: 1782210000
+                  completed_at: null
+                  output: null
+                  usage: { credits_reserved: 1.2, credits_charged: 1.2, credits_settled: 0, credits_refunded: 0 }
+                  request_id: req_effect123
+                  error_code: null
+                  error_message: null
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402':
+          description: Insufficient USD balance.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: Effect or requested version is unavailable.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Idempotency key conflicts with another request body.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /v1/music-video/tasks:
     post:
       operationId: createMusicVideoTask
       tags: [Music Video]
       x-apidog-folder: Music Video API/Create Video
-      summary: Create Music Video
+      summary: Create a Music Video workflow task
       security:
         - BearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+          description: Optional retry key. Reusing the same key with the same request body returns the accepted task; reusing it with a different body returns `409 idempotency_conflict`.
+          example: mv-create-cus_123-01
       description: |
-        Music Video requires public HTTPS image URLs and a public HTTPS audio URL.
-        Prompt, language, quality, style, lip reference, subtitle, and format
-        controls are optional. BeatAPI detects the audio duration before task
-        creation and charges the detected billable duration at the selected
-        per-second customer-credit rate. If audio duration cannot be detected,
-        `duration` is used as the billing fallback.
+        Music Video requires public HTTPS media URLs. Requests that omit
+        `mv_tier` use `standard` and preserve the existing API behavior.
+        Premium retains the configured integration host but uses a distinct
+        execution path selected internally by BeatAPI.
+        Shared controls include prompt, aspect ratio, subtitles, and the tier's
+        billing fallback. Language, quality, `lip_sync`, `lip_ref_url`,
+        `srt_url`, and `compose_mode` are Standard-only. Premium uses `mv_mode`
+        plus `style` and mode-specific images or `lip_ref_urls`. BeatAPI detects audio duration before task
+        creation and records the billable duration in Task usage. If audio
+        duration cannot be detected, `duration` is used as the billing fallback.
 
         Input limits:
-        - Images must contain 1-7 public HTTPS URLs.
+        - Standard images must contain 1-7 public HTTPS URLs.
+        - Premium `sing` and `sing_perform` accept 0-6 scene images and require 1-2 `lip_ref_urls`.
+        - Premium `dance` and `perform` require exactly 6 scene images.
         - Use png, jpg, jpeg, or webp images; each image should be 50 MB or smaller.
         - Image aspect ratio should be between 1:4 and 4:1.
-        - Audio must be a public HTTPS mp3, wav, aac, or m4a URL between 10 and 180 seconds.
+        - Standard audio must be 10-180 seconds; Premium audio must be 10-300 seconds and contain vocals or lyrics rather than instrumental-only audio.
         - The audio file should be 50 MB or smaller.
         - `prompt` is optional and must be at most 3000 characters.
-        - `lip_ref_url`, when provided, must be a public HTTPS image URL. Use a clear, front-facing close-up face reference for best lip-sync results.
-        - `srt_url`, when provided, must point to an `.srt` subtitle file.
-        - `duration` is only a billing fallback when BeatAPI cannot detect the audio length; it must be 10-180 seconds and cannot override a detected audio duration.
+        - Standard `lip_sync=true` requires `lip_ref_url`. It must be a public HTTPS image URL showing a clear, front-facing close-up face.
+        - Standard `srt_url`, when provided, must point to an `.srt` subtitle file.
+        - `duration` is only a billing fallback when BeatAPI cannot detect the audio length; Standard accepts 10-180 seconds and Premium accepts 10-300 seconds. It cannot override a detected audio duration.
 
         BeatAPI validates URL shape, text limits, enum values, combination
         limits, and audio duration at task creation. Files uploaded through
         `/v1/files` are also checked for type and size before they can be used.
         Third-party media URLs must follow the same media requirements and may
         be rejected during processing if invalid.
-
-        Customer pricing:
-        - MV 540p standard: 4 credits/s
-        - MV 720p standard: 5 credits/s
-        - MV 1080p standard: 6 credits/s
-        - lip_sync add-on: +2 credits/s
-        - MV 720p high: 16 credits/s
-        - MV 1080p high: 18 credits/s
-        - Ecommerce Video 1080p: 15 credits/s
 
         Combination limits:
         - `quality=high` is not supported with `resolution=540p`.
@@ -724,76 +1956,23 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [images, audio_url]
-              properties:
-                images:
-                  type: array
-                  minItems: 1
-                  maxItems: 7
-                  description: 1-7 public HTTPS image URLs. Use png, jpg, jpeg, or webp images; each image should be 50 MB or smaller, with aspect ratio from 1:4 to 4:1. /v1/files uploads are checked before use; third-party URLs may be rejected during processing if invalid.
-                  items:
-                    type: string
-                    format: uri
-                audio_url:
-                  type: string
-                  format: uri
-                  description: Public HTTPS audio URL. Use mp3, wav, aac, or m4a; file size should be 50 MB or smaller and duration must be 10-180 seconds.
-                prompt:
-                  type: string
-                  maxLength: 3000
-                  description: Optional creative prompt, at most 3000 characters.
-                language:
-                  type: string
-                  enum: [en, zh]
-                lip_sync:
-                  type: boolean
-                lip_ref_url:
-                  type: string
-                  format: uri
-                  description: Public HTTPS image URL for lip-sync face reference. Use a clear, front-facing close-up face reference.
-                style:
-                  type: string
-                  maxLength: 200
-                  description: Optional style phrase, at most 200 characters.
-                quality:
-                  type: string
-                  enum: [standard, high]
-                  default: standard
-                aspect_ratio:
-                  type: string
-                  enum: ['1:1', '16:9', '9:16', '4:3', '3:4']
-                resolution:
-                  type: string
-                  enum: [540p, 720p, 1080p]
-                  default: 720p
-                add_subtitle:
-                  type: boolean
-                subtitle_color:
-                  type: string
-                  pattern: '^#[0-9A-Fa-f]{6}$'
-                  example: '#FFFFFF'
-                srt_url:
-                  type: string
-                  format: uri
-                duration:
-                  type: integer
-                  minimum: 10
-                  maximum: 180
-                  description: Billing fallback when audio duration cannot be detected. It must be 10-180 seconds and cannot override a detected audio duration.
-                compose_mode:
-                  type: string
-                  enum: [auto, manual]
-                  default: auto
-            example:
-              images:
-                - https://media.beatapi.io/samples/neon-singer.png
-              audio_url: https://media.beatapi.io/samples/neon-singer-preview.mp3
-              prompt: Neon rooftop performance with metro cutaways and cinematic light trails.
-              language: en
-              quality: standard
-              resolution: 720p
-              compose_mode: auto
+              $ref: '#/components/schemas/MusicVideoTaskCreateRequest'
+            examples:
+              standard_backwards_compatible:
+                summary: Standard music video
+                value:
+                  mv_tier: standard
+                  images: ['https://media.beatapi.io/samples/neon-singer.png']
+                  audio_url: https://media.beatapi.io/samples/neon-singer-preview.mp3
+                  resolution: 720p
+              premium_sing:
+                value: { mv_tier: premium, mv_mode: sing, images: [], lip_ref_urls: ['https://media.beatapi.io/samples/singer.png'], audio_url: 'https://media.beatapi.io/samples/song.mp3', resolution: 720p }
+              premium_sing_perform:
+                value: { mv_tier: premium, mv_mode: sing_perform, images: ['https://media.beatapi.io/samples/stage.png'], lip_ref_urls: ['https://media.beatapi.io/samples/singer.png'], audio_url: 'https://media.beatapi.io/samples/song.mp3', resolution: 720p }
+              premium_dance:
+                value: { mv_tier: premium, mv_mode: dance, images: ['https://media.beatapi.io/1.png', 'https://media.beatapi.io/2.png', 'https://media.beatapi.io/3.png', 'https://media.beatapi.io/4.png', 'https://media.beatapi.io/5.png', 'https://media.beatapi.io/6.png'], audio_url: 'https://media.beatapi.io/samples/song.mp3', resolution: 720p }
+              premium_perform:
+                value: { mv_tier: premium, mv_mode: perform, images: ['https://media.beatapi.io/1.png', 'https://media.beatapi.io/2.png', 'https://media.beatapi.io/3.png', 'https://media.beatapi.io/4.png', 'https://media.beatapi.io/5.png', 'https://media.beatapi.io/6.png'], audio_url: 'https://media.beatapi.io/samples/song.mp3', resolution: 720p }
       responses:
         '201':
           description: Task accepted
@@ -801,28 +1980,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskResponse'
-              example:
-                data:
-                  id: task_8K2qA
-                  object: task
-                  workflow: music-video
-                  status: queued
-                  stage: queued
-                  storyboard:
-                    shots: []
-                  created_at: 1782210000
-                  updated_at: 1782210000
-                  completed_at: null
-                  output: null
-                  usage:
-                    credits_reserved: 75
-                    credits_charged: 75
-                    billable_duration_seconds: 15
-                    credits_settled: 0
-                    credits_refunded: 0
-                  request_id: req_abc123
-                  error_code: null
-                  error_message: null
+              examples:
+                standard_backwards_compatible:
+                  summary: Standard music video
+                  value:
+                    data:
+                      id: task_8K2qA
+                      object: task
+                      task_kind: workflow
+                      capability_id: music-video
+                      capability_version: 1
+                      workflow: music-video
+                      status: queued
+                      stage: queued
+                      storyboard:
+                        shots: []
+                      created_at: 1782210000
+                      updated_at: 1782210000
+                      completed_at: null
+                      output: null
+                      usage:
+                        credits_reserved: 1.5
+                        credits_charged: 1.5
+                        billable_duration_seconds: 15
+                        credits_settled: 0
+                        credits_refunded: 0
+                      request_id: req_abc123
+                      error_code: null
+                      error_message: null
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -837,6 +2022,17 @@ paths:
                 error:
                   code: insufficient_credits
                   message: Account balance is not sufficient for this task.
+                  request_id: req_xxx
+        '409':
+          description: The Idempotency-Key was reused with a different body or while another request with that key is still being processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: idempotency_conflict
+                  message: This Idempotency-Key was already used with a different request body.
                   request_id: req_xxx
         '429':
           description: User concurrency exceeded.
@@ -855,13 +2051,16 @@ paths:
       operationId: editMusicVideoShot
       tags: [Music Video]
       x-apidog-folder: Music Video API/Advanced Editing
-      summary: Edit Shot
+      summary: Edit a Music Video storyboard shot
       security:
         - BearerAuth: []
       description: |
         Edit one storyboard shot using its BeatAPI `shot_id`. This operation
-        charges BeatAPI customer credits using the selected quality/resolution
-        rate and the shot duration. Default shot duration is 5 seconds.
+        charges the customer USD balance using the applicable task tier and shot
+        duration. Standard edits accept only `prompt`. Premium edits accept
+        `prompt` plus up to 6 optional replacement `images`. Generation quality,
+        resolution, and shot duration are inherited from the original task and
+        are not editable request fields.
         When the edit finishes, BeatAPI stores the edited shot media and exposes
         it on that shot. The existing final Music Video is not replaced until
         you call compose with the selected shot ids.
@@ -878,35 +2077,21 @@ paths:
           schema:
             type: string
           example: shot_xxx
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+          description: Optional retry key. Reusing the same key for this task, shot, and request body returns the accepted task without charging the USD amount again; changing any of them returns `409 idempotency_conflict`.
+          example: music-edit-task_8K2qA-shot_xxx-01
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [prompt]
-              properties:
-                prompt:
-                  type: string
-                  maxLength: 3000
-                duration:
-                  type: integer
-                  minimum: 1
-                  maximum: 180
-                  default: 5
-                quality:
-                  type: string
-                  enum: [standard, high]
-                  default: standard
-                resolution:
-                  type: string
-                  enum: [540p, 720p, 1080p]
-                  default: 720p
+              $ref: '#/components/schemas/EditMusicVideoShotRequest'
             example:
               prompt: Night city chorus with brighter face lighting.
-              duration: 5
-              quality: standard
-              resolution: 720p
+              images: ['https://media.beatapi.io/samples/stage.png']
       responses:
         '202':
           description: Shot edit accepted
@@ -918,19 +2103,37 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '402':
+          description: Account balance is not sufficient for this shot edit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The Idempotency-Key was reused for a different task, shot, or request body, or the same request is still being processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: Task or shot not found.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/ProcessingUnavailable'
 
   /v1/music-video/tasks/{task_id}/shots/{shot_id}/media:
     post:
       operationId: getMusicVideoShotMedia
       tags: [Music Video]
       x-apidog-folder: Music Video API/Advanced Editing
-      summary: Get Shot Media
+      summary: Retrieve a Music Video storyboard shot media URL
       security:
         - BearerAuth: []
       description: |
@@ -989,18 +2192,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/ProcessingUnavailable'
 
   /v1/music-video/tasks/{task_id}/compose:
     post:
       operationId: composeMusicVideoTask
       tags: [Music Video]
       x-apidog-folder: Music Video API/Advanced Editing
-      summary: Compose Video
+      summary: Compose a Music Video task from selected shots
       security:
         - BearerAuth: []
       description: |
         Compose selected BeatAPI storyboard shots into the final Music Video.
-        This operation charges a fixed 1 BeatAPI customer credit.
+        This operation charges a fixed $1 USD.
       parameters:
         - in: path
           name: task_id
@@ -1008,6 +2217,12 @@ paths:
           schema:
             type: string
           example: task_8K2qA
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+          description: Optional retry key. Reusing the same key for this task and request body returns the accepted task without charging the $1 compose amount again; changing either returns `409 idempotency_conflict`.
+          example: music-compose-task_8K2qA-01
       requestBody:
         required: true
         content:
@@ -1034,22 +2249,51 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '402':
+          description: Account balance is not sufficient for this compose operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The Idempotency-Key was reused for a different task or request body, or the same request is still being processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: Task or shot not found.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/ProcessingUnavailable'
 
   /v1/ecommerce-video/tasks:
     post:
       operationId: createEcommerceVideoTask
       tags: [Ecommerce Video]
       x-apidog-folder: Ecommerce Video API
-      summary: Create Ecommerce Video
+      summary: Create an Ecommerce Video workflow task
       security:
         - BearerAuth: []
-      description: Ecommerce Video requires product images and an explicit output duration.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+          description: Optional retry key. Reusing the same key with the same request body returns the accepted task; reusing it with a different body returns `409 idempotency_conflict`.
+          example: ecommerce-create-cus_123-01
+      description: |
+        Ecommerce Video creates a complete product video from public HTTPS product or
+        lifestyle images, an explicit duration, and optional creative direction. Upload
+        local images with `POST /v1/files`, save the returned Task ID, and poll
+        `GET /v1/tasks/{task_id}` until the task succeeds or fails.
       requestBody:
         required: true
         content:
@@ -1062,6 +2306,7 @@ paths:
                   type: array
                   minItems: 1
                   maxItems: 7
+                  description: Primary product or scene image first, followed by up to six additional public HTTPS PNG, JPEG, or WebP product or lifestyle images. Upload local files with `POST /v1/files` and use the returned `data.url`.
                   items:
                     type: string
                     format: uri
@@ -1069,21 +2314,25 @@ paths:
                   type: integer
                   minimum: 10
                   maximum: 60
+                  description: Required target output duration in seconds and the basis for USD calculation. Allowed range is 10-60 seconds.
                 prompt:
                   type: string
                   maxLength: 2000
+                  description: Optional creative direction, audience, product benefit, offer, tone, scenes, or call to action. Maximum 2000 characters.
                 aspect_ratio:
                   type: string
                   enum: ['16:9', '9:16', '1:1']
+                  description: Target output placement. Use 16:9 for landscape, 9:16 for vertical social, or 1:1 for square placements; set explicitly for stable layout.
                 language:
                   type: string
                   enum: [en, zh]
+                  description: Dialogue and narration language. Use `en` for English or `zh` for Chinese; set explicitly when the prompt contains mixed languages.
             example:
               images:
                 - https://media.beatapi.io/samples/smart-bottle.png
               duration: 15
               prompt: Fast product launch ad for paid social.
-              aspect_ratio: 9:16
+              aspect_ratio: '9:16'
       responses:
         '201':
           description: Task accepted
@@ -1095,6 +2344,9 @@ paths:
                 data:
                   id: task_p9Lm2
                   object: task
+                  task_kind: workflow
+                  capability_id: ecommerce-video
+                  capability_version: 1
                   workflow: ecommerce-video
                   status: queued
                   stage: queued
@@ -1103,8 +2355,8 @@ paths:
                   completed_at: null
                   output: null
                   usage:
-                    credits_reserved: 225
-                    credits_charged: 225
+                    credits_reserved: 4.5
+                    credits_charged: 4.5
                     billable_duration_seconds: 15
                     credits_settled: 0
                     credits_refunded: 0
@@ -1125,6 +2377,17 @@ paths:
                 error:
                   code: insufficient_credits
                   message: Account balance is not sufficient for this task.
+                  request_id: req_xxx
+        '409':
+          description: The Idempotency-Key was reused with a different body or while another request with that key is still being processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: idempotency_conflict
+                  message: This Idempotency-Key was already used with a different request body.
                   request_id: req_xxx
         '429':
           description: User concurrency exceeded.
@@ -1168,6 +2431,9 @@ paths:
                     data:
                       id: task_8K2qA
                       object: task
+                      task_kind: workflow
+                      capability_id: music-video
+                      capability_version: 1
                       workflow: music-video
                       status: queued
                       stage: queued
@@ -1178,8 +2444,8 @@ paths:
                       completed_at: null
                       output: null
                       usage:
-                        credits_reserved: 75
-                        credits_charged: 75
+                        credits_reserved: 1.5
+                        credits_charged: 1.5
                         billable_duration_seconds: 15
                         credits_settled: 0
                         credits_refunded: 0
@@ -1192,6 +2458,9 @@ paths:
                     data:
                       id: task_8K2qA
                       object: task
+                      task_kind: workflow
+                      capability_id: music-video
+                      capability_version: 1
                       workflow: music-video
                       status: storyboard_ready
                       stage: storyboard_ready
@@ -1210,10 +2479,10 @@ paths:
                             updated_at: 1782210300
                       output: null
                       usage:
-                        credits_reserved: 75
-                        credits_charged: 75
+                        credits_reserved: 1.5
+                        credits_charged: 1.5
                         billable_duration_seconds: 15
-                        credits_settled: 75
+                        credits_settled: 1.5
                         credits_refunded: 0
                       request_id: req_abc123
                       error_code: null
@@ -1224,6 +2493,9 @@ paths:
                     data:
                       id: task_8K2qA
                       object: task
+                      task_kind: workflow
+                      capability_id: music-video
+                      capability_version: 1
                       workflow: music-video
                       status: failed
                       stage: failed
@@ -1234,11 +2506,11 @@ paths:
                       completed_at: 1782210600
                       output: null
                       usage:
-                        credits_reserved: 75
-                        credits_charged: 75
+                        credits_reserved: 1.5
+                        credits_charged: 1.5
                         billable_duration_seconds: 15
                         credits_settled: 0
-                        credits_refunded: 75
+                        credits_refunded: 1.5
                       request_id: req_abc123
                       error_code: processing_timeout
                       error_message: Task waited too long for platform capacity.
@@ -1262,9 +2534,9 @@ paths:
       security:
         - BearerAuth: []
       description: |
-        Reserve credits and allocate a short-lived BeatAPI realtime session. Send a unique
+        Reserve the selected USD amount and allocate a short-lived BeatAPI realtime session. Send a unique
         `Idempotency-Key`; retries with the same user, key, and body return the same session
-        and deterministic short-lived `client_secret` without reserving credits or capacity
+        and deterministic short-lived `client_secret` without reserving funds or capacity
         twice. The browser receives only that BeatAPI secret and connects with
         `@beatapi/realtime`.
 
@@ -1280,7 +2552,8 @@ paths:
         - in: header
           name: Idempotency-Key
           required: true
-          schema: { type: string, maxLength: 128 }
+          schema: { type: string, minLength: 1, maxLength: 128 }
+          example: rts-create-cus_123-01
       requestBody:
         required: true
         content:
@@ -1292,14 +2565,22 @@ paths:
                 max_duration_seconds:
                   type: integer
                   enum: [15, 60, 300]
+                  description: Required maximum live session duration in seconds. The USD amount is reserved for the selected 15, 60, or 300 second tier.
                 allowed_origins:
                   type: array
                   minItems: 1
                   maxItems: 10
-                  items: { type: string, format: uri }
+                  description: Exact browser origins allowed to use the short-lived session secret.
+                  items:
+                    type: string
+                    format: uri
+                    pattern: '^(https://[A-Za-z0-9.-]+(?::[0-9]+)?|http://(?:localhost|127\\.0\\.0\\.1|\\[::1\\])(?::[0-9]+)?)$'
+                    description: Exact browser origin. Use HTTPS in production; HTTP is accepted only for localhost development.
+                    example: https://app.example.com
                 metadata:
                   type: object
                   maxProperties: 20
+                  description: Optional server-defined string metadata for your own correlation. Up to 20 keys; keys are at most 64 characters and values at most 256 characters.
                   propertyNames: { maxLength: 64 }
                   additionalProperties: { type: string, maxLength: 256 }
             example:
@@ -1311,11 +2592,25 @@ paths:
           description: Realtime session created
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/RealtimeSessionResponse' }
+              schema: { $ref: '#/components/schemas/RealtimeSessionCreateResponse' }
+              example:
+                data:
+                  id: rts_8K2qA
+                  object: realtime.session
+                  status: ready
+                  client_secret: brt_live_example_short_lived_secret
+                  expires_at: '2026-08-12T10:01:00.000Z'
+                  max_duration_seconds: 60
+                  allowed_origins: ['https://app.example.com']
+                  credits: { reserved: 1.2, settled: 0, refunded: 0 }
+                  request_id: req_abc123
+                  created_at: '2026-08-12T10:00:00.000Z'
+                  connected_at: null
+                  closed_at: null
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '402':
-          description: Insufficient credits
+          description: Insufficient USD balance
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
         '409':
           description: Idempotency conflict
@@ -1379,24 +2674,44 @@ paths:
               example:
                 data:
                   object: usage
-                  credit_balance: 1080
+                  credit_balance: 21.6
                   total_tasks: 12
-                  credits_settled: 720
-                  credits_refunded: 450
+                  credits_settled: 14.4
+                  credits_refunded: 9
                   concurrency:
                     limit: 2
                     active: 1
                   realtime:
                     sessions: 3
-                    credits: 90
+                    credits: 1.8
                     active: 1
                   by_workflow:
                     - workflow: music-video
                       tasks: 8
-                      credits_settled: 480
+                      credits_settled: 9.6
                     - workflow: ecommerce-video
                       tasks: 4
-                      credits_settled: 240
+                      credits_settled: 4.8
+                  by_capability:
+                    - task_kind: image
+                      capability_id: seedream-5-pro
+                      tasks: 3
+                      credits_settled: 0.42
+                    - task_kind: video
+                      capability_id: veo-3.1
+                      tasks: 2
+                      credits_settled: 14
+                  by_model:
+                    - media_type: image
+                      model: seedream-5-pro
+                      tasks: 3
+                      credits_settled: 0.42
+                  by_api_key:
+                    - api_key_id: key_abc123
+                      title: Production
+                      key_prefix: sk_live_abcd
+                      tasks: 12
+                      credits_settled: 14.4
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -1419,7 +2734,7 @@ paths:
           (`image/png`, `image/jpeg`, `image/webp`).
         - Audio: `mp3`, `wav`, `aac`, `m4a`
           (`audio/mpeg`, `audio/wav`, `audio/aac`, `audio/mp4`).
-        - Audio uploads must be 10-180 seconds.
+        - Audio uploads must be 10-300 seconds. The selected Music Video tier applies its own task limit: Standard 10-180 seconds; Premium 10-300 seconds.
         - Subtitles: `srt` (`application/x-subrip`; multipart uploads may use
           `text/plain` only when the filename ends in `.srt`).
         - PDF, generic text files, octet-stream uploads, videos, and zip files
@@ -1445,6 +2760,22 @@ paths:
                 purpose:
                   type: string
                   enum: [input]
+          image/png:
+            schema: { type: string, format: binary }
+          image/jpeg:
+            schema: { type: string, format: binary }
+          image/webp:
+            schema: { type: string, format: binary }
+          audio/mpeg:
+            schema: { type: string, format: binary }
+          audio/wav:
+            schema: { type: string, format: binary }
+          audio/aac:
+            schema: { type: string, format: binary }
+          audio/mp4:
+            schema: { type: string, format: binary }
+          application/x-subrip:
+            schema: { type: string, format: binary }
       responses:
         '201':
           description: File uploaded
@@ -1468,6 +2799,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v1/webhooks:
     get:
@@ -1499,6 +2834,10 @@ paths:
                       updated_at: 1782210000
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
     post:
       operationId: createWebhookEndpoint
       tags: [Webhooks]
@@ -1507,8 +2846,9 @@ paths:
       security:
         - BearerAuth: []
       description: |
-        The signing secret is returned only once at creation time. Store it
-        securely. Later responses return a masked secret.
+        The public API returns the signing secret in full at creation time. Store
+        it securely; later public API responses return a masked secret. An
+        authenticated dashboard owner can explicitly reveal the secret again.
 
         BeatAPI sends these headers with each delivery:
         - `x-beatapi-event`: `task.succeeded` or `task.failed`
@@ -1572,8 +2912,9 @@ paths:
         ```
 
         Reject old timestamps to prevent replay attacks. A 5 minute window is
-        recommended. Failed deliveries are retried at most 3 times with fixed
-        backoff windows of 1 minute, 5 minutes, and 15 minutes. Polling
+        recommended. A delivery is attempted at most 3 times total: the initial
+        request plus up to 2 retries, with fixed backoff windows of 1 minute and
+        5 minutes. Polling
         `GET /v1/tasks/{task_id}` remains the source of truth.
       requestBody:
         required: true
@@ -1586,10 +2927,14 @@ paths:
                 url:
                   type: string
                   format: uri
+                  pattern: '^https://'
+                  description: Public HTTPS callback URL that accepts BeatAPI task events. Do not use localhost or a private-network URL.
                 description:
                   type: string
+                  description: Optional internal label for identifying the endpoint in your account.
                 events:
                   type: array
+                  description: Task events to deliver. Omit to subscribe to both `task.succeeded` and `task.failed`.
                   items:
                     type: string
                     enum: [task.succeeded, task.failed]
@@ -1618,6 +2963,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v1/webhooks/{id}:
     get:
@@ -1660,6 +3009,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
     patch:
       operationId: updateWebhookEndpoint
       tags: [Webhooks]
@@ -1684,6 +3037,8 @@ paths:
                 url:
                   type: string
                   format: uri
+                  pattern: '^https://'
+                  description: Public HTTPS callback URL that accepts BeatAPI task events. Do not use localhost or a private-network URL.
                 description:
                   type: string
                 status:
@@ -1707,6 +3062,16 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Webhook endpoint not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
     delete:
       operationId: deleteWebhookEndpoint
       tags: [Webhooks]
@@ -1734,3 +3099,13 @@ paths:
                   deleted: true
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Webhook endpoint not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'

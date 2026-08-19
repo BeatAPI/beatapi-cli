@@ -103,6 +103,117 @@ test("anonymous workflow discovery never reads credentials", async () => {
   assert.match(output.stdout(), /music-video/);
 });
 
+test("supports anonymous model and Effect discovery plus generation commands", async () => {
+  const output = outputCollector();
+  const directory = await mkdtemp(resolve(tmpdir(), "beatapi-cli-generation-"));
+  const inputPath = resolve(directory, "input.json");
+  await writeFile(inputPath, JSON.stringify({ model: "nano-banana", prompt: "Still" }));
+  const calls: unknown[] = [];
+  let credentialReads = 0;
+  const discoveryClient = {
+    listGenerationModels: async () => {
+      calls.push(["models"]);
+      return [{ id: "nano-banana" }];
+    },
+    listEffects: async (filters: unknown) => {
+      calls.push(["effects-list", filters]);
+      return [{ id: "video-muscle-max" }];
+    },
+    getEffect: async (id: string) => {
+      calls.push(["effects-get", id]);
+      return { id };
+    },
+  };
+
+  try {
+    const credentialStore = {
+      get: async () => {
+        credentialReads += 1;
+        throw new Error("anonymous discovery must not read credentials");
+      },
+      set: async () => undefined,
+      delete: async () => undefined,
+    };
+    assert.equal(
+      await run(["models", "list"], {
+        ...output.io,
+        credentialStore,
+        createClient: () => discoveryClient,
+      }),
+      0,
+    );
+    assert.equal(
+      await run(["effects", "list", "--output-type", "video"], {
+        ...output.io,
+        credentialStore,
+        createClient: () => discoveryClient,
+      }),
+      0,
+    );
+    assert.equal(
+      await run(["effects", "get", "video/muscle"], {
+        ...output.io,
+        credentialStore,
+        createClient: () => discoveryClient,
+      }),
+      0,
+    );
+    assert.equal(credentialReads, 0);
+
+    const mutationClient = {
+      createImageTask: async (input: unknown) => {
+        calls.push(["image", input]);
+        return { id: "task_image" };
+      },
+      createVideoTask: async (input: unknown) => {
+        calls.push(["video", input]);
+        return { id: "task_video" };
+      },
+      createEffectTask: async (input: unknown, options: unknown) => {
+        calls.push(["effect-create", input, options]);
+        return { id: "task_effect" };
+      },
+    };
+    await run(["images", "create", "--file", inputPath], {
+      ...output.io,
+      apiKey: "sk_test",
+      createClient: () => mutationClient,
+    });
+    await run(["videos", "create", "--file", inputPath], {
+      ...output.io,
+      apiKey: "sk_test",
+      createClient: () => mutationClient,
+    });
+    await run([
+      "effects",
+      "create",
+      "--file",
+      inputPath,
+      "--idempotency-key",
+      "effect-cli-123",
+    ], {
+      ...output.io,
+      apiKey: "sk_test",
+      createClient: () => mutationClient,
+    });
+
+    assert.deepEqual(calls, [
+      ["models"],
+      ["effects-list", { outputType: "video" }],
+      ["effects-get", "video/muscle"],
+      ["image", { model: "nano-banana", prompt: "Still" }],
+      ["video", { model: "nano-banana", prompt: "Still" }],
+      [
+        "effect-create",
+        { model: "nano-banana", prompt: "Still" },
+        { idempotencyKey: "effect-cli-123" },
+      ],
+    ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("task wait sends progress to stderr and result JSON to stdout", async () => {
   const output = outputCollector();
   const exitCode = await run(

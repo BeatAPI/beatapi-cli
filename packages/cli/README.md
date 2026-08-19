@@ -5,7 +5,7 @@ Official BeatAPI command-line interface for people, scripts, and AI agents.
 ```bash
 npm install --global beatapi
 beatapi auth login
-beatapi workflows list
+beatapi models list
 ```
 
 The login command validates the key before storing it in the operating
@@ -14,6 +14,10 @@ system's credential manager. For CI and short-lived shells, set
 
 ```bash
 beatapi music-video create --file music-video.json
+beatapi images create --file image.json
+beatapi videos create --file video.json
+beatapi effects list --output-type video
+beatapi effects create --file effect.json --idempotency-key effect_123
 beatapi tasks wait task_123 --interval 7000
 beatapi realtime sessions create --duration 60 \
   --origin https://app.example.com \

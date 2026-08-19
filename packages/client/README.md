@@ -1,7 +1,7 @@
 # beatapi-client
 
-Official TypeScript client for the public BeatAPI asynchronous and Realtime
-Video APIs.
+Official TypeScript client for the public BeatAPI image, video, Effect,
+workflow, and Realtime APIs.
 
 ```bash
 npm install beatapi-client
@@ -12,6 +12,12 @@ import { BeatAPIClient } from "beatapi-client";
 
 const beatapi = new BeatAPIClient({
   apiKey: process.env.BEATAPI_API_KEY,
+});
+
+const models = await beatapi.listGenerationModels();
+const imageTask = await beatapi.createImageTask({
+  model: "nano-banana",
+  prompt: "Editorial product photograph on warm stone.",
 });
 
 const task = await beatapi.createMusicVideoTask({

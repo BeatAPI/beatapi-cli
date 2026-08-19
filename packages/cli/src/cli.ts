@@ -6,9 +6,12 @@ import {
   BeatAPIClient,
   type BeatAPITask,
   type CreateWebhookInput,
+  type CreateEffectTaskInput,
   type CreateRealtimeSessionInput,
   type EcommerceVideoTaskInput,
+  type ImageGenerationTaskInput,
   type MusicVideoTaskInput,
+  type VideoGenerationTaskInput,
   type UpdateWebhookInput,
 } from "beatapi-client";
 
@@ -27,6 +30,12 @@ const HELP = `BeatAPI CLI ${VERSION}
 Usage:
   beatapi auth login|status|logout
   beatapi workflows list
+  beatapi models list
+  beatapi images create --file <input.json>
+  beatapi videos create --file <input.json>
+  beatapi effects list [--output-type <image|video>] [--category <name>]
+  beatapi effects get <effect-id>
+  beatapi effects create --file <input.json> [--idempotency-key <key>]
   beatapi usage
   beatapi files upload <path>
   beatapi music-video create --file <input.json>
@@ -58,6 +67,15 @@ type Writable = (text: string) => void;
 
 interface ClientLike {
   listWorkflows(): Promise<unknown>;
+  listGenerationModels(): Promise<unknown>;
+  createImageTask(input: ImageGenerationTaskInput): Promise<unknown>;
+  createVideoTask(input: VideoGenerationTaskInput): Promise<unknown>;
+  listEffects(filters?: { outputType?: "image" | "video"; category?: string }): Promise<unknown>;
+  getEffect(id: string): Promise<unknown>;
+  createEffectTask(
+    input: CreateEffectTaskInput,
+    options: { idempotencyKey: string },
+  ): Promise<unknown>;
   getUsage(): Promise<unknown>;
   getTask(taskId: string): Promise<unknown>;
   waitForTask(
@@ -262,6 +280,37 @@ export async function run(
     return 0;
   }
 
+  if (resource === "models" && (action === undefined || action === "list")) {
+    printJson(await createClient(undefined).listGenerationModels(), stdout);
+    return 0;
+  }
+
+  if (resource === "effects" && action === "list") {
+    const outputType = flagValue(args, "--output-type");
+    if (outputType !== undefined && outputType !== "image" && outputType !== "video") {
+      throw new Error("--output-type must be image or video.");
+    }
+    const category = flagValue(args, "--category");
+    printJson(
+      await createClient(undefined).listEffects({
+        ...(outputType ? { outputType } : {}),
+        ...(category ? { category } : {}),
+      }),
+      stdout,
+    );
+    return 0;
+  }
+
+  if (resource === "effects" && action === "get") {
+    printJson(
+      await createClient(undefined).getEffect(
+        requireIdentifier(firstIdentifier, "Effect ID"),
+      ),
+      stdout,
+    );
+    return 0;
+  }
+
   const resolved =
     options.apiKey?.trim()
       ? { apiKey: options.apiKey.trim(), source: "explicit" as const }
@@ -287,6 +336,29 @@ export async function run(
 
   if (resource === "usage" && action === undefined) {
     printJson(await client.getUsage(), stdout);
+    return 0;
+  }
+
+  if ((resource === "images" || resource === "image") && action === "create") {
+    const input = await readJson<ImageGenerationTaskInput>(inputFile(args));
+    printJson(await client.createImageTask(input), stdout);
+    return 0;
+  }
+
+  if ((resource === "videos" || resource === "video") && action === "create") {
+    const input = await readJson<VideoGenerationTaskInput>(inputFile(args));
+    printJson(await client.createVideoTask(input), stdout);
+    return 0;
+  }
+
+  if (resource === "effects" && action === "create") {
+    const input = await readJson<CreateEffectTaskInput>(inputFile(args));
+    printJson(
+      await client.createEffectTask(input, {
+        idempotencyKey: flagValue(args, "--idempotency-key") ?? randomUUID(),
+      }),
+      stdout,
+    );
     return 0;
   }
 

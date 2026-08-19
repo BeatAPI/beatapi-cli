@@ -7,6 +7,16 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Typed client methods and CLI commands for model discovery, image generation,
+  video generation, and versioned Effect discovery and task creation.
+
+### Changed
+
+- Synchronize the public contract with unified task fields, USD-denominated
+  usage, four image models, seven video models, and Effect APIs.
+
 ## [0.2.0] - 2026-07-31
 
 ### Added
