@@ -18,6 +18,33 @@ function jsonResponse(
   });
 }
 
+test("rejects unsafe API origins unless an operator explicitly trusts HTTPS", () => {
+  assert.throws(
+    () => new BeatAPIClient({ apiKey: "test", baseUrl: "http://example.com" }),
+    /HTTPS origin/i,
+  );
+  assert.throws(
+    () => new BeatAPIClient({ apiKey: "test", baseUrl: "https://example.com" }),
+    /explicit.*operator setting/i,
+  );
+  assert.equal(
+    new BeatAPIClient({
+      apiKey: "test",
+      baseUrl: "https://example.com",
+      trustCustomBaseUrl: true,
+    }).baseUrl,
+    "https://example.com",
+  );
+  assert.equal(
+    new BeatAPIClient({
+      apiKey: "test",
+      baseUrl: "http://127.0.0.1:3000",
+      allowInsecureLocalhost: true,
+    }).baseUrl,
+    "http://127.0.0.1:3000",
+  );
+});
+
 test("parses success envelopes and sends bearer authentication", async () => {
   let authorization = "";
   const client = new BeatAPIClient({

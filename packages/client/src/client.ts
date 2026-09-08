@@ -54,6 +54,8 @@ export interface RetryOptions {
 export interface BeatAPIClientOptions {
   apiKey?: string | undefined;
   baseUrl?: string | undefined;
+  allowInsecureLocalhost?: boolean | undefined;
+  trustCustomBaseUrl?: boolean | undefined;
   fetch?: FetchLike | undefined;
   sleep?: ((milliseconds: number) => Promise<void>) | undefined;
   random?: (() => number) | undefined;
@@ -98,6 +100,47 @@ const ACTIONABLE_OR_TERMINAL_STATUSES = new Set<BeatAPITaskStatus>([
 ]);
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+function validatedBaseUrl(
+  value: string,
+  options: Pick<
+    BeatAPIClientOptions,
+    "allowInsecureLocalhost" | "trustCustomBaseUrl"
+  >,
+): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new TypeError("BeatAPI base URL must be an exact HTTPS origin.");
+  }
+  const isLoopback = ["localhost", "127.0.0.1", "[::1]"].includes(
+    parsed.hostname,
+  );
+  const insecureTestOrigin = options.allowInsecureLocalhost === true && isLoopback;
+  if (
+    (parsed.protocol !== "https:" && !insecureTestOrigin) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== "/" ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new TypeError(
+      "BeatAPI base URL must be an exact HTTPS origin without credentials, path, query, or fragment.",
+    );
+  }
+  if (
+    parsed.origin !== "https://api.beatapi.io" &&
+    !insecureTestOrigin &&
+    options.trustCustomBaseUrl !== true
+  ) {
+    throw new TypeError(
+      "A custom BeatAPI HTTPS origin requires an explicit trusted operator setting.",
+    );
+  }
+  return parsed.origin;
+}
 
 function assertPositiveInteger(value: number, label: string): void {
   if (!Number.isInteger(value) || value <= 0) {
@@ -179,9 +222,9 @@ export class BeatAPIClient {
 
   constructor(options: BeatAPIClientOptions = {}) {
     this.apiKey = options.apiKey;
-    this.baseUrl = (options.baseUrl || "https://api.beatapi.io").replace(
-      /\/+$/,
-      "",
+    this.baseUrl = validatedBaseUrl(
+      options.baseUrl || "https://api.beatapi.io",
+      options,
     );
     const fetchImpl = options.fetch ?? globalThis.fetch;
     if (typeof fetchImpl !== "function") {
