@@ -210,6 +210,8 @@ function defaultCreateClient(
   return new BeatAPIClient({
     apiKey,
     baseUrl: env.BEATAPI_BASE_URL,
+    allowInsecureLocalhost: env.BEATAPI_ALLOW_INSECURE_LOCALHOST === "1",
+    trustCustomBaseUrl: env.BEATAPI_TRUST_CUSTOM_BASE_URL === "1",
   });
 }
 

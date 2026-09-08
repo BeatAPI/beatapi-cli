@@ -2,6 +2,7 @@ import { BeatAPIError } from "./errors.js";
 import type { components, operations } from "./types.generated.js";
 
 export type BeatAPIWorkflow = components["schemas"]["Workflow"];
+export type BeatAPITextModel = components["schemas"]["TextModel"];
 export type BeatAPITaskStatus = components["schemas"]["TaskStatus"];
 export type BeatAPITask = components["schemas"]["Task"];
 export type BeatAPIUsage = components["schemas"]["Usage"];
@@ -9,6 +10,8 @@ export type BeatAPIFile = components["schemas"]["File"];
 export type BeatAPIShotMedia = components["schemas"]["ShotMedia"];
 export type BeatAPIWebhook = components["schemas"]["WebhookEndpoint"];
 export type BeatAPIRealtimeSession = components["schemas"]["RealtimeSession"];
+export type BeatAPIGenerationModel = components["schemas"]["GenerationModel"];
+export type BeatAPIEffect = components["schemas"]["Effect"];
 export type BeatAPIDeleteResult = components["schemas"]["DeleteResponse"]["data"];
 
 export type MusicVideoTaskInput =
@@ -25,6 +28,17 @@ export type UpdateWebhookInput =
   operations["updateWebhookEndpoint"]["requestBody"]["content"]["application/json"];
 export type CreateRealtimeSessionInput =
   operations["createRealtimeSession"]["requestBody"]["content"]["application/json"];
+export type TextResponseInput =
+  operations["createTextResponse"]["requestBody"]["content"]["application/json"];
+export type TextResponseOutput = components["schemas"]["TextPassthroughResponse"];
+export type VideoAnalysisTaskInput =
+  operations["createVideoAnalysisTask"]["requestBody"]["content"]["application/json"];
+export type ImageGenerationTaskInput =
+  operations["createImageGenerationTask"]["requestBody"]["content"]["application/json"];
+export type VideoGenerationTaskInput =
+  operations["createVideoGenerationTask"]["requestBody"]["content"]["application/json"];
+export type CreateEffectTaskInput =
+  operations["createEffectTask"]["requestBody"]["content"]["application/json"];
 
 type FetchLike = (
   input: string | URL | Request,
@@ -40,6 +54,8 @@ export interface RetryOptions {
 export interface BeatAPIClientOptions {
   apiKey?: string | undefined;
   baseUrl?: string | undefined;
+  allowInsecureLocalhost?: boolean | undefined;
+  trustCustomBaseUrl?: boolean | undefined;
   fetch?: FetchLike | undefined;
   sleep?: ((milliseconds: number) => Promise<void>) | undefined;
   random?: (() => number) | undefined;
@@ -50,6 +66,7 @@ interface RequestOptions {
   body?: unknown | undefined;
   headers?: HeadersInit | undefined;
   authenticated?: boolean | undefined;
+  responseShape?: "beatapi" | "raw" | undefined;
   retry?: RetryOptions | undefined;
 }
 
@@ -83,6 +100,47 @@ const ACTIONABLE_OR_TERMINAL_STATUSES = new Set<BeatAPITaskStatus>([
 ]);
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+function validatedBaseUrl(
+  value: string,
+  options: Pick<
+    BeatAPIClientOptions,
+    "allowInsecureLocalhost" | "trustCustomBaseUrl"
+  >,
+): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new TypeError("BeatAPI base URL must be an exact HTTPS origin.");
+  }
+  const isLoopback = ["localhost", "127.0.0.1", "[::1]"].includes(
+    parsed.hostname,
+  );
+  const insecureTestOrigin = options.allowInsecureLocalhost === true && isLoopback;
+  if (
+    (parsed.protocol !== "https:" && !insecureTestOrigin) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== "/" ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new TypeError(
+      "BeatAPI base URL must be an exact HTTPS origin without credentials, path, query, or fragment.",
+    );
+  }
+  if (
+    parsed.origin !== "https://api.beatapi.io" &&
+    !insecureTestOrigin &&
+    options.trustCustomBaseUrl !== true
+  ) {
+    throw new TypeError(
+      "A custom BeatAPI HTTPS origin requires an explicit trusted operator setting.",
+    );
+  }
+  return parsed.origin;
+}
 
 function assertPositiveInteger(value: number, label: string): void {
   if (!Number.isInteger(value) || value <= 0) {
@@ -164,9 +222,9 @@ export class BeatAPIClient {
 
   constructor(options: BeatAPIClientOptions = {}) {
     this.apiKey = options.apiKey;
-    this.baseUrl = (options.baseUrl || "https://api.beatapi.io").replace(
-      /\/+$/,
-      "",
+    this.baseUrl = validatedBaseUrl(
+      options.baseUrl || "https://api.beatapi.io",
+      options,
     );
     const fetchImpl = options.fetch ?? globalThis.fetch;
     if (typeof fetchImpl !== "function") {
@@ -223,7 +281,11 @@ export class BeatAPIClient {
         });
         const payload = await readPayload(response);
 
-        if (response.ok) return unwrapData<T>(payload);
+        if (response.ok) {
+          return options.responseShape === "raw"
+            ? (payload as T)
+            : unwrapData<T>(payload);
+        }
 
         const error = errorFromResponse(response, payload);
         if (
@@ -274,6 +336,84 @@ export class BeatAPIClient {
       "/v1/workflows",
       { authenticated: false },
     ).then((result) => result.data);
+  }
+
+  listTextModels(): Promise<BeatAPITextModel[]> {
+    return this.request<{ object: "list"; data: BeatAPITextModel[] }>(
+      "/v1/models",
+      { responseShape: "raw" },
+    ).then((result) => result.data);
+  }
+
+  listGenerationModels(): Promise<BeatAPIGenerationModel[]> {
+    return this.request<{ object: "list"; data: BeatAPIGenerationModel[] }>(
+      "/v1/media/models",
+      { authenticated: false },
+    ).then((result) => result.data);
+  }
+
+  createImageTask(input: ImageGenerationTaskInput): Promise<BeatAPITask> {
+    return this.request("/v1/images/tasks", { method: "POST", body: input });
+  }
+
+  createVideoTask(input: VideoGenerationTaskInput): Promise<BeatAPITask> {
+    return this.request("/v1/videos/tasks", { method: "POST", body: input });
+  }
+
+  listEffects(
+    filters: { outputType?: "image" | "video"; category?: string } = {},
+  ): Promise<BeatAPIEffect[]> {
+    const query = new URLSearchParams();
+    if (filters.outputType) query.set("output_type", filters.outputType);
+    if (filters.category) query.set("category", filters.category);
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+    return this.request<{ object: "list"; data: BeatAPIEffect[] }>(
+      `/v1/effects${suffix}`,
+      { authenticated: false },
+    ).then((result) => result.data);
+  }
+
+  getEffect(effectId: string): Promise<BeatAPIEffect> {
+    return this.request(`/v1/effects/${encodePathSegment(effectId)}`, {
+      authenticated: false,
+    });
+  }
+
+  createEffectTask(
+    input: CreateEffectTaskInput,
+    options: { idempotencyKey: string },
+  ): Promise<BeatAPITask> {
+    const idempotencyKey = options.idempotencyKey.trim();
+    if (!idempotencyKey) {
+      throw new TypeError("idempotencyKey must not be empty.");
+    }
+    return this.request("/v1/effects/tasks", {
+      method: "POST",
+      body: input,
+      headers: { "idempotency-key": idempotencyKey },
+    });
+  }
+
+  createTextResponse(input: TextResponseInput): Promise<TextResponseOutput> {
+    return this.request("/v1/responses", {
+      method: "POST",
+      body: input,
+      responseShape: "raw",
+    });
+  }
+
+  createVideoAnalysisTask(
+    input: VideoAnalysisTaskInput,
+    options: { idempotencyKey?: string } = {},
+  ): Promise<BeatAPITask> {
+    const idempotencyKey = options.idempotencyKey?.trim();
+    return this.request("/v1/video-analysis/tasks", {
+      method: "POST",
+      body: input,
+      ...(idempotencyKey
+        ? { headers: { "idempotency-key": idempotencyKey } }
+        : {}),
+    });
   }
 
   getUsage(): Promise<BeatAPIUsage> {

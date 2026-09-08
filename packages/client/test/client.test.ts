@@ -18,6 +18,33 @@ function jsonResponse(
   });
 }
 
+test("rejects unsafe API origins unless an operator explicitly trusts HTTPS", () => {
+  assert.throws(
+    () => new BeatAPIClient({ apiKey: "test", baseUrl: "http://example.com" }),
+    /HTTPS origin/i,
+  );
+  assert.throws(
+    () => new BeatAPIClient({ apiKey: "test", baseUrl: "https://example.com" }),
+    /explicit.*operator setting/i,
+  );
+  assert.equal(
+    new BeatAPIClient({
+      apiKey: "test",
+      baseUrl: "https://example.com",
+      trustCustomBaseUrl: true,
+    }).baseUrl,
+    "https://example.com",
+  );
+  assert.equal(
+    new BeatAPIClient({
+      apiKey: "test",
+      baseUrl: "http://127.0.0.1:3000",
+      allowInsecureLocalhost: true,
+    }).baseUrl,
+    "http://127.0.0.1:3000",
+  );
+});
+
 test("parses success envelopes and sends bearer authentication", async () => {
   let authorization = "";
   const client = new BeatAPIClient({
@@ -42,6 +69,192 @@ test("parses success envelopes and sends bearer authentication", async () => {
 
   assert.equal(usage.credit_balance, 50);
   assert.equal(authorization, "Bearer sk_test_value");
+});
+
+test("lists the authenticated text-model catalog in its OpenAI-compatible shape", async () => {
+  let authorization = "";
+  const client = new BeatAPIClient({
+    apiKey: "sk_test_value",
+    fetch: async (_input, init) => {
+      authorization = new Headers(init?.headers).get("authorization") || "";
+      return jsonResponse({
+        object: "list",
+        data: [
+          { id: "gpt-5.6-terra", object: "model", created: 1, owned_by: "beatapi" },
+        ],
+      });
+    },
+  });
+
+  const models = await client.listTextModels();
+
+  assert.equal(models[0]?.id, "gpt-5.6-terra");
+  assert.equal(authorization, "Bearer sk_test_value");
+});
+
+test("creates a non-streaming text response without unwrapping the provider payload", async () => {
+  let request: { path: string; body: unknown } | undefined;
+  const client = new BeatAPIClient({
+    apiKey: "sk_test_value",
+    fetch: async (input, init) => {
+      request = {
+        path: new URL(String(input)).pathname,
+        body: JSON.parse(String(init?.body)) as unknown,
+      };
+      return jsonResponse({
+        id: "resp_test",
+        object: "response",
+        output_text: "A concise answer.",
+      });
+    },
+  });
+
+  const response = await client.createTextResponse({
+    model: "gpt-5.6-terra",
+    input: "Summarize this.",
+    stream: false,
+  });
+
+  assert.deepEqual(request, {
+    path: "/v1/responses",
+    body: {
+      model: "gpt-5.6-terra",
+      input: "Summarize this.",
+      stream: false,
+    },
+  });
+  assert.equal((response as { output_text: string }).output_text, "A concise answer.");
+});
+
+test("creates a video-analysis task with an idempotency key", async () => {
+  let request: { path: string; idempotencyKey: string | null; body: unknown } | undefined;
+  const client = new BeatAPIClient({
+    apiKey: "sk_test_value",
+    fetch: async (input, init) => {
+      request = {
+        path: new URL(String(input)).pathname,
+        idempotencyKey: new Headers(init?.headers).get("idempotency-key"),
+        body: JSON.parse(String(init?.body)) as unknown,
+      };
+      return jsonResponse({ data: { id: "task_analysis", status: "queued" } });
+    },
+  });
+
+  const task = await client.createVideoAnalysisTask(
+    {
+      video_url: "https://media.example.com/input.mp4",
+      prompt: "Return timestamped scene changes.",
+      analysis_depth: "deep",
+    },
+    { idempotencyKey: "analysis-test" },
+  );
+
+  assert.equal(task.id, "task_analysis");
+  assert.deepEqual(request, {
+    path: "/v1/video-analysis/tasks",
+    idempotencyKey: "analysis-test",
+    body: {
+      video_url: "https://media.example.com/input.mp4",
+      prompt: "Return timestamped scene changes.",
+      analysis_depth: "deep",
+    },
+  });
+});
+
+test("discovers generation models and creates image and video tasks", async () => {
+  const requests: Array<{ method: string; path: string; authorization: string | null }> = [];
+  const client = new BeatAPIClient({
+    apiKey: "sk_test_value",
+    fetch: async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      requests.push({
+        method: init?.method || "GET",
+        path,
+        authorization: new Headers(init?.headers).get("authorization"),
+      });
+      if (path === "/v1/media/models") {
+        return jsonResponse({
+          data: {
+            object: "list",
+            data: [
+              {
+                id: "nano-banana-2",
+                object: "generation_model",
+                name: "Nano Banana 2",
+                media_type: "image",
+                input_modes: ["text", "image"],
+              },
+            ],
+          },
+        });
+      }
+      return jsonResponse({ data: { id: "task_media", status: "queued" } });
+    },
+  });
+
+  const models = await client.listGenerationModels();
+  await client.createImageTask({ model: "nano-banana-2", prompt: "Still" });
+  await client.createVideoTask({ model: "seedance-2.5", prompt: "Motion" });
+
+  assert.equal(models[0]?.id, "nano-banana-2");
+  assert.deepEqual(requests, [
+    { method: "GET", path: "/v1/media/models", authorization: null },
+    { method: "POST", path: "/v1/images/tasks", authorization: "Bearer sk_test_value" },
+    { method: "POST", path: "/v1/videos/tasks", authorization: "Bearer sk_test_value" },
+  ]);
+});
+
+test("discovers Effect contracts and creates a versioned Effect task", async () => {
+  const requests: Array<{ method: string; path: string; query: string; idempotencyKey: string | null }> = [];
+  const client = new BeatAPIClient({
+    apiKey: "sk_test_value",
+    fetch: async (input, init) => {
+      const url = new URL(String(input));
+      requests.push({
+        method: init?.method || "GET",
+        path: url.pathname,
+        query: url.search,
+        idempotencyKey: new Headers(init?.headers).get("idempotency-key"),
+      });
+      if (url.pathname === "/v1/effects") {
+        return jsonResponse({ data: { object: "list", data: [{ id: "muscle", version: 1 }] } });
+      }
+      if (url.pathname === "/v1/effects/muscle") {
+        return jsonResponse({ data: { id: "muscle", version: 1 } });
+      }
+      return jsonResponse({ data: { id: "task_effect", status: "queued" } });
+    },
+  });
+
+  const effects = await client.listEffects({ outputType: "video", category: "transformation" });
+  const effect = await client.getEffect("muscle");
+  const task = await client.createEffectTask(
+    {
+      effect_id: "muscle",
+      effect_version: 1,
+      images: ["https://media.example.com/portrait.png"],
+    },
+    { idempotencyKey: "effect-test" },
+  );
+
+  assert.equal(effects[0]?.id, "muscle");
+  assert.equal(effect.version, 1);
+  assert.equal(task.id, "task_effect");
+  assert.deepEqual(requests, [
+    {
+      method: "GET",
+      path: "/v1/effects",
+      query: "?output_type=video&category=transformation",
+      idempotencyKey: null,
+    },
+    { method: "GET", path: "/v1/effects/muscle", query: "", idempotencyKey: null },
+    {
+      method: "POST",
+      path: "/v1/effects/tasks",
+      query: "",
+      idempotencyKey: "effect-test",
+    },
+  ]);
 });
 
 test("preserves structured errors, request id, and retry-after", async () => {
