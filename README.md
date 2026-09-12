@@ -79,6 +79,12 @@ beatapi music-video compose TASK --shot SHOT_1 --shot SHOT_2
 
 beatapi ecommerce-video create --file ./ecommerce-video.json
 
+beatapi capabilities search --query "小红书 笔记搜索" --kind data --limit 5
+beatapi capabilities inspect data:xiaohongshu.note.search
+beatapi capabilities run --reference data:xiaohongshu.note.search \
+  --operation start --file ./social-data.json \
+  --idempotency-key social-data-run-001
+
 beatapi realtime sessions create --duration 60 \
   --origin https://app.example.com \
   --idempotency-key rt_checkout_123
@@ -140,7 +146,8 @@ try {
 
 The client exposes every public contract operation: workflows, usage, file
 upload, music-video automatic and manual composition, ecommerce-video tasks,
-task polling, webhook CRUD, and Realtime session create/get/close.
+Social Data and unified capability search/inspect/run, task polling, webhook
+CRUD, and Realtime session create/get/close.
 
 Create Realtime sessions only on a trusted server. The returned `client_secret`
 is short lived and may be handed to the browser SDK; never expose the long-lived
