@@ -13,6 +13,26 @@ export type BeatAPIRealtimeSession = components["schemas"]["RealtimeSession"];
 export type BeatAPIGenerationModel = components["schemas"]["GenerationModel"];
 export type BeatAPIEffect = components["schemas"]["Effect"];
 export type BeatAPIDeleteResult = components["schemas"]["DeleteResponse"]["data"];
+export type BeatAPICapabilityContract = components["schemas"]["CapabilityContract"];
+export type BeatAPICapabilitySearchPage = {
+  object: "capability.list";
+  data: BeatAPICapabilityContract[];
+  next_cursor: string;
+};
+export type BeatAPICapabilitySearchInput = {
+  query?: string;
+  kind?: "model" | "data" | "workflow";
+  platform?: string;
+  limit?: number;
+  cursor?: string;
+};
+export type BeatAPICapabilityRunInput = {
+  reference: string;
+  operation: "start" | "status";
+  input?: Record<string, unknown>;
+  task_id?: string;
+  idempotency_key?: string;
+};
 
 export type MusicVideoTaskInput =
   operations["createMusicVideoTask"]["requestBody"]["content"]["application/json"];
@@ -329,6 +349,29 @@ export class BeatAPIClient {
     throw new BeatAPIError("BeatAPI request exhausted its retry budget.", {
       code: "retry_exhausted",
     });
+  }
+
+  searchCapabilities(input: BeatAPICapabilitySearchInput = {}): Promise<BeatAPICapabilitySearchPage> {
+    return this.request<{ object: "capability.list"; data: BeatAPICapabilitySearchPage }>(
+      "/v1/capabilities/search",
+      { method: "POST", body: input },
+    ).then((result) => result.data);
+  }
+
+  inspectCapability(reference: string): Promise<BeatAPICapabilityContract> {
+    return this.request<BeatAPICapabilityContract>("/v1/capabilities/inspect", {
+      method: "POST", body: { reference },
+    });
+  }
+
+  runCapability(input: BeatAPICapabilityRunInput): Promise<unknown> {
+    const path = input.operation === "status"
+      ? "/v1/capabilities/run/status"
+      : "/v1/capabilities/run";
+    const headers = input.idempotency_key
+      ? { "Idempotency-Key": input.idempotency_key }
+      : undefined;
+    return this.request(path, { method: "POST", body: input, headers });
   }
 
   listWorkflows(): Promise<BeatAPIWorkflow[]> {

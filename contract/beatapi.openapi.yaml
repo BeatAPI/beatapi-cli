@@ -717,7 +717,7 @@ components:
       properties:
         id:
           type: string
-          enum: [nano-banana, nano-banana-2, nano-banana-2-lite, nano-banana-pro, gpt-image-2, seedream-5-pro, grok-imagine-image-2.0, minimax-h3, grok-imagine-video-1.5, seedance-2, seedance-2-fast, seedance-2-mini, veo-3.1, seedance-2.5, kling-3, kling-2.6-motion-control, kling-3-motion-control, wan-3.0, wan-3.0-prime, happyhorse-1.0, happyhorse-1.1, minimax-h3-max, minimax-h3-max-turbo]
+          enum: [nano-banana, nano-banana-2, nano-banana-2-lite, nano-banana-pro, gpt-image-2, gpt-image-2.5-flare, gpt-image-2.5-sunburst, seedream-5-pro, grok-imagine-image-2.0, minimax-h3, grok-imagine-video-1.5, seedance-2, seedance-2-fast, seedance-2-mini, veo-3.1, seedance-2.5, kling-3, kling-2.6-motion-control, kling-3-motion-control, wan-3.0, wan-3.0-prime, happyhorse-1.0, happyhorse-1.1, minimax-h3-max, minimax-h3-max-turbo]
         object: { type: string, enum: [generation_model] }
         name: { type: string }
         media_type: { type: string, enum: [image, video] }
@@ -744,6 +744,8 @@ components:
         - $ref: '#/components/schemas/NanoBanana2LiteImageRequest'
         - $ref: '#/components/schemas/NanoBananaProImageRequest'
         - $ref: '#/components/schemas/GptImage2Request'
+        - $ref: '#/components/schemas/GptImage25FlareRequest'
+        - $ref: '#/components/schemas/GptImage25SunburstRequest'
         - $ref: '#/components/schemas/Seedream5ProImageRequest'
         - $ref: '#/components/schemas/GrokImagineImage20Request'
       discriminator:
@@ -754,6 +756,8 @@ components:
           nano-banana-2-lite: '#/components/schemas/NanoBanana2LiteImageRequest'
           nano-banana-pro: '#/components/schemas/NanoBananaProImageRequest'
           gpt-image-2: '#/components/schemas/GptImage2Request'
+          gpt-image-2.5-flare: '#/components/schemas/GptImage25FlareRequest'
+          gpt-image-2.5-sunburst: '#/components/schemas/GptImage25SunburstRequest'
           seedream-5-pro: '#/components/schemas/Seedream5ProImageRequest'
           grok-imagine-image-2.0: '#/components/schemas/GrokImagineImage20Request'
     NanoBananaImageRequest:
@@ -853,6 +857,44 @@ components:
           default: auto
           description: Output image aspect ratio.
         resolution: { type: string, enum: [1K, 2K, 4K], default: 1K, description: Output resolution tier. }
+    GptImage25FlareRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      properties:
+        model: { type: string, const: gpt-image-2.5-flare, description: Must be `gpt-image-2.5-flare`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Generation or image-editing instructions. }
+        images:
+          type: array
+          minItems: 1
+          maxItems: 16
+          description: Public HTTPS reference-image URLs. Omit for text-to-image.
+          items: { type: string, format: uri, pattern: '^https://' }
+        aspect_ratio:
+          type: string
+          enum: [auto, '1:1', '3:2', '2:3', '4:3', '3:4', '5:4', '4:5', '16:9', '9:16', '2:1', '1:2', '3:1', '1:3', '21:9', '9:21']
+          default: auto
+          description: Output image aspect ratio. `auto` renders a square frame.
+        resolution: { type: string, enum: [1K, 2K, 4K], default: 1K, description: Output resolution tier. }
+    GptImage25SunburstRequest:
+      type: object
+      additionalProperties: false
+      required: [model, prompt]
+      properties:
+        model: { type: string, const: gpt-image-2.5-sunburst, description: Must be `gpt-image-2.5-sunburst`. }
+        prompt: { type: string, minLength: 1, maxLength: 5000, description: Generation or image-editing instructions. }
+        images:
+          type: array
+          minItems: 1
+          maxItems: 16
+          description: Public HTTPS reference-image URLs. Omit for text-to-image.
+          items: { type: string, format: uri, pattern: '^https://' }
+        aspect_ratio:
+          type: string
+          enum: [auto, '1:1', '3:2', '2:3', '4:3', '3:4', '5:4', '4:5', '16:9', '9:16', '2:1', '1:2', '3:1', '1:3', '21:9', '9:21']
+          default: auto
+          description: Output image aspect ratio. `auto` renders a square frame.
+        resolution: { type: string, enum: [1K, 2K, 4K], default: 1K, description: Output resolution tier. }
     Seedream5ProImageRequest:
       type: object
       additionalProperties: false
@@ -946,7 +988,7 @@ components:
           type: string
           enum: [adaptive, '21:9', '16:9', '4:3', '1:1', '3:4', '9:16']
           description: Text mode defaults to 16:9 and does not accept adaptive. Frame mode always uses adaptive. Reference mode defaults to adaptive and also accepts a concrete ratio.
-        resolution: { type: string, enum: [768P, 2K], default: 768P, description: Output resolution tier. }
+        resolution: { type: string, enum: ['480p', '768P', '1080p', '2K'], default: 768P, description: 'Output resolution tier. 1080p is exclusive to this gateway — no other provider sells H3 at that tier. Price scales with it.' }
     GrokImagineVideo15Request:
       type: object
       additionalProperties: false
@@ -1720,6 +1762,47 @@ components:
               type: string
             deleted:
               type: boolean
+    CapabilityContract:
+      type: object
+      required: [reference, kind, id, version, status, title, description, execution, versions, validation]
+      properties:
+        reference: { type: string }
+        kind: { type: string, enum: [model, data, workflow] }
+        id: { type: string }
+        version: { type: string }
+        status: { type: string }
+        title: { type: string }
+        description: { type: string }
+        categories: { type: array, items: { type: string } }
+        platforms: { type: array, items: { type: string } }
+        entities: { type: array, items: { type: string } }
+        operations: { type: array, items: { type: string } }
+        input_schema: { type: object, additionalProperties: true }
+        output_schema: { type: object, additionalProperties: true }
+        pagination: { type: object, additionalProperties: true }
+        limits: { type: object, additionalProperties: true }
+        errors: { type: object, additionalProperties: true }
+        execution:
+          type: object
+          required: [mode, status_supported]
+          properties:
+            mode: { type: string, enum: [sync, async] }
+            status_supported: { type: boolean }
+            result_location: { type: string }
+        versions:
+          type: object
+          required: [catalog_version, contract_version]
+          properties:
+            catalog_version: { type: string }
+            contract_version: { type: string }
+            price_version: { type: string }
+        validation:
+          type: object
+          required: [state]
+          properties:
+            state: { type: string, enum: [verified, partial, unknown] }
+            verified_at: { type: string }
+            evidence: { type: array, items: { type: string } }
     Error:
       type: object
       required: [error]
@@ -1824,6 +1907,50 @@ components:
             error:
               code: processing_unavailable
               message: Task processing is temporarily unavailable.
+              request_id: req_xxx
+    NotFound:
+      description: The requested capability or task does not exist for this account.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: The requested resource was not found.
+              request_id: req_xxx
+    InsufficientCredits:
+      description: Account balance is insufficient for the requested paid operation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: insufficient_credits
+              message: Account balance is not sufficient for this task.
+              request_id: req_xxx
+    Conflict:
+      description: The idempotency key conflicts with an existing request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: idempotency_conflict
+              message: This Idempotency-Key was already used with a different request body.
+              request_id: req_xxx
+    BadGateway:
+      description: The task could not be completed by the processing service.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: processing_failed
+              message: Task failed during processing.
               request_id: req_xxx
 paths:
   /v1/models:
@@ -3075,6 +3202,174 @@ paths:
                   code: user_concurrency_exceeded
                   message: You have reached the active processing task limit of 5. Wait for a processing task to finish before creating another one.
                   request_id: req_xxx
+
+  /v1/capabilities/search:
+    post:
+      operationId: searchCapabilities
+      tags: [Capabilities]
+      summary: Search Model, Data, and Workflow capabilities
+      description: Returns a small page of provider-neutral capability references. Search is free and does not execute a task.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query: { type: string }
+                kind: { type: string, enum: [model, data, workflow] }
+                platform: { type: string }
+                limit: { type: integer, minimum: 1, maximum: 50, default: 5 }
+                cursor: { type: string }
+      responses:
+        '200':
+          description: Capability search page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [object, data, next_cursor]
+                    properties:
+                      object: { type: string, enum: [capability.list] }
+                      data: { type: array, items: { $ref: '#/components/schemas/CapabilityContract' } }
+                      next_cursor: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/capabilities/inspect:
+    post:
+      operationId: inspectCapability
+      tags: [Capabilities]
+      summary: Inspect a capability contract
+      description: Returns the complete public input, output, pagination, limits, execution, price, and validation contract.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference]
+              properties:
+                reference: { type: string, pattern: '^(model|data|workflow):.+$' }
+      responses:
+        '200':
+          description: Capability contract
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CapabilityContract' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/capabilities/run:
+    post:
+      operationId: runCapability
+      tags: [Capabilities]
+      summary: Start a capability or retrieve a task status
+      description: Starts a selected capability with existing authentication, idempotency, billing, and task semantics. Use operation=status with task_id for asynchronous tasks.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference, operation]
+              properties:
+                reference: { type: string, pattern: '^(model|data|workflow):.+$' }
+                operation: { type: string, enum: [start, status] }
+                input: { type: object, additionalProperties: true }
+                task_id: { type: string }
+                idempotency_key: { type: string, maxLength: 255 }
+      responses:
+        '200': { description: Synchronous result or task status, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        '201': { description: Accepted task, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/InsufficientCredits' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+
+  /v1/capabilities/run/status:
+    post:
+      operationId: getCapabilityRunStatus
+      tags: [Capabilities]
+      summary: Retrieve an asynchronous capability task status
+      description: Free status lookup using the existing task projection and artifact semantics.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference, task_id]
+              properties:
+                reference: { type: string, pattern: '^(model|data|workflow):.+$' }
+                operation: { type: string, enum: [status], default: status }
+                task_id: { type: string }
+      responses:
+        '200': { description: Task status, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/social-data/call:
+    post:
+      operationId: callSocialData
+      summary: Call a social data endpoint
+      description: |
+        Calls one catalogued social data action through BeatAPI. The supplier is never part of the public contract.
+        Use the action catalog published by BeatAPI and pass scalar query parameters for GET
+        actions or a JSON object for POST actions.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  pattern: '^[a-z0-9]+(?:[._-][a-z0-9]+)+$'
+                  description: BeatAPI action ID from the public social-data catalog.
+                params:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '200':
+          description: Synchronous social data result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [object, status, request_id, action, data]
+                properties:
+                  object: { type: string, enum: [social_data.call] }
+                  status: { type: string, enum: [succeeded] }
+                  action: { type: string }
+                  request_id: { type: string }
+                  data: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '502': { $ref: '#/components/responses/BadGateway' }
 
   /v1/tasks/{task_id}:
     get:

@@ -436,6 +436,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/capabilities/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Model, Data, and Workflow capabilities
+         * @description Returns a small page of provider-neutral capability references. Search is free and does not execute a task.
+         */
+        post: operations["searchCapabilities"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/capabilities/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inspect a capability contract
+         * @description Returns the complete public input, output, pagination, limits, execution, price, and validation contract.
+         */
+        post: operations["inspectCapability"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/capabilities/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a capability or retrieve a task status
+         * @description Starts a selected capability with existing authentication, idempotency, billing, and task semantics. Use operation=status with task_id for asynchronous tasks.
+         */
+        post: operations["runCapability"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/capabilities/run/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retrieve an asynchronous capability task status
+         * @description Free status lookup using the existing task projection and artifact semantics.
+         */
+        post: operations["getCapabilityRunStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/social-data/call": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Call a social data endpoint
+         * @description Calls one catalogued social data action through BeatAPI. The supplier is never part of the public contract.
+         *     Use the action catalog published by BeatAPI and pass scalar query parameters for GET
+         *     actions or a JSON object for POST actions.
+         */
+        post: operations["callSocialData"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tasks/{task_id}": {
         parameters: {
             query?: never;
@@ -1159,7 +1261,7 @@ export interface components {
         };
         GenerationModel: {
             /** @enum {string} */
-            id: "nano-banana" | "nano-banana-2" | "nano-banana-2-lite" | "nano-banana-pro" | "gpt-image-2" | "seedream-5-pro" | "grok-imagine-image-2.0" | "minimax-h3" | "grok-imagine-video-1.5" | "seedance-2" | "seedance-2-fast" | "seedance-2-mini" | "veo-3.1" | "seedance-2.5" | "kling-3" | "kling-2.6-motion-control" | "kling-3-motion-control" | "wan-3.0" | "wan-3.0-prime" | "happyhorse-1.0" | "happyhorse-1.1" | "minimax-h3-max" | "minimax-h3-max-turbo";
+            id: "nano-banana" | "nano-banana-2" | "nano-banana-2-lite" | "nano-banana-pro" | "gpt-image-2" | "gpt-image-2.5-flare" | "gpt-image-2.5-sunburst" | "seedream-5-pro" | "grok-imagine-image-2.0" | "minimax-h3" | "grok-imagine-video-1.5" | "seedance-2" | "seedance-2-fast" | "seedance-2-mini" | "veo-3.1" | "seedance-2.5" | "kling-3" | "kling-2.6-motion-control" | "kling-3-motion-control" | "wan-3.0" | "wan-3.0-prime" | "happyhorse-1.0" | "happyhorse-1.1" | "minimax-h3-max" | "minimax-h3-max-turbo";
             /** @enum {string} */
             object: "generation_model";
             name: string;
@@ -1175,7 +1277,7 @@ export interface components {
         GenerationModelListResponse: {
             data: components["schemas"]["GenerationModelList"];
         };
-        ImageGenerationTaskCreateRequest: components["schemas"]["NanoBananaImageRequest"] | components["schemas"]["NanoBanana2ImageRequest"] | components["schemas"]["NanoBanana2LiteImageRequest"] | components["schemas"]["NanoBananaProImageRequest"] | components["schemas"]["GptImage2Request"] | components["schemas"]["Seedream5ProImageRequest"] | components["schemas"]["GrokImagineImage20Request"];
+        ImageGenerationTaskCreateRequest: components["schemas"]["NanoBananaImageRequest"] | components["schemas"]["NanoBanana2ImageRequest"] | components["schemas"]["NanoBanana2LiteImageRequest"] | components["schemas"]["NanoBananaProImageRequest"] | components["schemas"]["GptImage2Request"] | components["schemas"]["GptImage25FlareRequest"] | components["schemas"]["GptImage25SunburstRequest"] | components["schemas"]["Seedream5ProImageRequest"] | components["schemas"]["GrokImagineImage20Request"];
         NanoBananaImageRequest: {
             /**
              * @description Must be `nano-banana`. (enum property replaced by openapi-typescript)
@@ -1303,6 +1405,52 @@ export interface components {
              */
             resolution: "1K" | "2K" | "4K";
         };
+        GptImage25FlareRequest: {
+            /**
+             * @description Must be `gpt-image-2.5-flare`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "gpt-image-2.5-flare";
+            /** @description Generation or image-editing instructions. */
+            prompt: string;
+            /** @description Public HTTPS reference-image URLs. Omit for text-to-image. */
+            images?: string[];
+            /**
+             * @description Output image aspect ratio. `auto` renders a square frame.
+             * @default auto
+             * @enum {string}
+             */
+            aspect_ratio: "auto" | "1:1" | "3:2" | "2:3" | "4:3" | "3:4" | "5:4" | "4:5" | "16:9" | "9:16" | "2:1" | "1:2" | "3:1" | "1:3" | "21:9" | "9:21";
+            /**
+             * @description Output resolution tier.
+             * @default 1K
+             * @enum {string}
+             */
+            resolution: "1K" | "2K" | "4K";
+        };
+        GptImage25SunburstRequest: {
+            /**
+             * @description Must be `gpt-image-2.5-sunburst`. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            model: "gpt-image-2.5-sunburst";
+            /** @description Generation or image-editing instructions. */
+            prompt: string;
+            /** @description Public HTTPS reference-image URLs. Omit for text-to-image. */
+            images?: string[];
+            /**
+             * @description Output image aspect ratio. `auto` renders a square frame.
+             * @default auto
+             * @enum {string}
+             */
+            aspect_ratio: "auto" | "1:1" | "3:2" | "2:3" | "4:3" | "3:4" | "5:4" | "4:5" | "16:9" | "9:16" | "2:1" | "1:2" | "3:1" | "1:3" | "21:9" | "9:21";
+            /**
+             * @description Output resolution tier.
+             * @default 1K
+             * @enum {string}
+             */
+            resolution: "1K" | "2K" | "4K";
+        };
         Seedream5ProImageRequest: {
             /**
              * @description Must be `seedream-5-pro`. (enum property replaced by openapi-typescript)
@@ -1379,11 +1527,11 @@ export interface components {
              */
             aspect_ratio?: "adaptive" | "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
             /**
-             * @description Output resolution tier.
+             * @description Output resolution tier. 1080p is exclusive to this gateway — no other provider sells H3 at that tier. Price scales with it.
              * @default 768P
              * @enum {string}
              */
-            resolution: "768P" | "2K";
+            resolution: "480p" | "768P" | "1080p" | "2K";
         };
         /** @description `images` accepts one first frame and cannot be combined with `reference_images`. Omit `aspect_ratio` when `images` is supplied. 1080p accepts at most one image. */
         GrokImagineVideo15Request: {
@@ -2311,6 +2459,52 @@ export interface components {
                 deleted: boolean;
             };
         };
+        CapabilityContract: {
+            reference: string;
+            /** @enum {string} */
+            kind: "model" | "data" | "workflow";
+            id: string;
+            version: string;
+            status: string;
+            title: string;
+            description: string;
+            categories?: string[];
+            platforms?: string[];
+            entities?: string[];
+            operations?: string[];
+            input_schema?: {
+                [key: string]: unknown;
+            };
+            output_schema?: {
+                [key: string]: unknown;
+            };
+            pagination?: {
+                [key: string]: unknown;
+            };
+            limits?: {
+                [key: string]: unknown;
+            };
+            errors?: {
+                [key: string]: unknown;
+            };
+            execution: {
+                /** @enum {string} */
+                mode: "sync" | "async";
+                status_supported: boolean;
+                result_location?: string;
+            };
+            versions: {
+                catalog_version: string;
+                contract_version: string;
+                price_version?: string;
+            };
+            validation: {
+                /** @enum {string} */
+                state: "verified" | "partial" | "unknown";
+                verified_at?: string;
+                evidence?: string[];
+            };
+        };
         Error: {
             /** @description Structured BeatAPI error. Use `code` for program logic and retain `request_id` for support. */
             error: {
@@ -2415,6 +2609,78 @@ export interface components {
                  *       "error": {
                  *         "code": "processing_unavailable",
                  *         "message": "Task processing is temporarily unavailable.",
+                 *         "request_id": "req_xxx"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description The requested capability or task does not exist for this account. */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "not_found",
+                 *         "message": "The requested resource was not found.",
+                 *         "request_id": "req_xxx"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Account balance is insufficient for the requested paid operation. */
+        InsufficientCredits: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "insufficient_credits",
+                 *         "message": "Account balance is not sufficient for this task.",
+                 *         "request_id": "req_xxx"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description The idempotency key conflicts with an existing request. */
+        Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "idempotency_conflict",
+                 *         "message": "This Idempotency-Key was already used with a different request body.",
+                 *         "request_id": "req_xxx"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description The task could not be completed by the processing service. */
+        BadGateway: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "processing_failed",
+                 *         "message": "Task failed during processing.",
                  *         "request_id": "req_xxx"
                  *       }
                  *     }
@@ -3650,6 +3916,209 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    searchCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    query?: string;
+                    /** @enum {string} */
+                    kind?: "model" | "data" | "workflow";
+                    platform?: string;
+                    /** @default 5 */
+                    limit?: number;
+                    cursor?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Capability search page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** @enum {string} */
+                            object: "capability.list";
+                            data: components["schemas"]["CapabilityContract"][];
+                            next_cursor: string;
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    inspectCapability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reference: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Capability contract */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CapabilityContract"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    runCapability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reference: string;
+                    /** @enum {string} */
+                    operation: "start" | "status";
+                    input?: {
+                        [key: string]: unknown;
+                    };
+                    task_id?: string;
+                    idempotency_key?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Synchronous result or task status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Accepted task */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            402: components["responses"]["InsufficientCredits"];
+            409: components["responses"]["Conflict"];
+            502: components["responses"]["BadGateway"];
+        };
+    };
+    getCapabilityRunStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reference: string;
+                    /**
+                     * @default status
+                     * @enum {string}
+                     */
+                    operation?: "status";
+                    task_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Task status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    callSocialData: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description BeatAPI action ID from the public social-data catalog. */
+                    action: string;
+                    params?: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Synchronous social data result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        object: "social_data.call";
+                        /** @enum {string} */
+                        status: "succeeded";
+                        action: string;
+                        request_id: string;
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            502: components["responses"]["BadGateway"];
         };
     };
     getTask: {

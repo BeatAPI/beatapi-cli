@@ -27,6 +27,9 @@ const HELP = `BeatAPI CLI ${VERSION}
 Usage:
   beatapi auth login|status|logout
   beatapi workflows list
+  beatapi capabilities search [--query <text>] [--kind <model|data|workflow>]
+  beatapi capabilities inspect <reference>
+  beatapi capabilities run --reference <reference> --operation <start|status> [--file <input.json>] [--task-id <id>] [--idempotency-key <key>]
   beatapi usage
   beatapi files upload <path>
   beatapi music-video create --file <input.json>
@@ -58,6 +61,9 @@ type Writable = (text: string) => void;
 
 interface ClientLike {
   listWorkflows(): Promise<unknown>;
+  searchCapabilities(input?: { query?: string; kind?: "model" | "data" | "workflow"; platform?: string; limit?: number; cursor?: string }): Promise<unknown>;
+  inspectCapability(reference: string): Promise<unknown>;
+  runCapability(input: { reference: string; operation: "start" | "status"; input?: Record<string, unknown>; task_id?: string; idempotency_key?: string }): Promise<unknown>;
   getUsage(): Promise<unknown>;
   getTask(taskId: string): Promise<unknown>;
   waitForTask(
@@ -289,6 +295,48 @@ export async function run(
 
   if (resource === "usage" && action === undefined) {
     printJson(await client.getUsage(), stdout);
+    return 0;
+  }
+
+  if (resource === "capabilities" && action === "search") {
+    const kind = flagValue(args, "--kind") as "model" | "data" | "workflow" | undefined;
+    if (kind && !["model", "data", "workflow"].includes(kind)) {
+      throw new Error("--kind must be model, data, or workflow.");
+    }
+    const limitValue = flagValue(args, "--limit");
+    const limit = limitValue ? positiveInteger(limitValue, 5, "--limit") : undefined;
+    const searchInput: { query?: string; kind?: "model" | "data" | "workflow"; platform?: string; limit?: number; cursor?: string } = {};
+    const query = flagValue(args, "--query");
+    const platform = flagValue(args, "--platform");
+    const cursor = flagValue(args, "--cursor");
+    if (query) searchInput.query = query;
+    if (kind) searchInput.kind = kind;
+    if (platform) searchInput.platform = platform;
+    if (limit) searchInput.limit = limit;
+    if (cursor) searchInput.cursor = cursor;
+    printJson(await client.searchCapabilities(searchInput), stdout);
+    return 0;
+  }
+
+  if (resource === "capabilities" && action === "inspect") {
+    printJson(await client.inspectCapability(requireIdentifier(firstIdentifier, "Capability reference")), stdout);
+    return 0;
+  }
+
+  if (resource === "capabilities" && action === "run") {
+    const reference = requireIdentifier(flagValue(args, "--reference"), "--reference");
+    const operation = requireIdentifier(flagValue(args, "--operation"), "--operation");
+    if (operation !== "start" && operation !== "status") {
+      throw new Error("--operation must be start or status.");
+    }
+    const input = inputFile(args) ? await readJson<Record<string, unknown>>(inputFile(args)) : undefined;
+    const runInput: { reference: string; operation: "start" | "status"; input?: Record<string, unknown>; task_id?: string; idempotency_key?: string } = { reference, operation };
+    const taskId = flagValue(args, "--task-id");
+    const idempotencyKey = flagValue(args, "--idempotency-key");
+    if (input) runInput.input = input;
+    if (taskId) runInput.task_id = taskId;
+    if (idempotencyKey) runInput.idempotency_key = idempotencyKey;
+    printJson(await client.runCapability(runInput), stdout);
     return 0;
   }
 
