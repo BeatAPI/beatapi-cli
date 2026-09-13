@@ -1,5 +1,10 @@
 # BeatAPI CLI and TypeScript Client
 
+Unified Model/Data/Workflow commands are documented in
+[the capability guide](docs/capabilities.md). The 0.3.0 source adds Search,
+Inspect, Run and status while preserving existing commands. Check npm release
+availability and installed `--help` before using these new commands.
+
 Official command-line interface and TypeScript client for BeatAPI's public
 asynchronous workflows and Realtime Video API.
 

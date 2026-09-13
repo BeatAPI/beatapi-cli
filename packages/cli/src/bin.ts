@@ -16,6 +16,8 @@ try {
   process.exitCode = await run(process.argv.slice(2));
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`beatapi: ${message}\n`);
+  if(process.argv[2]==='capabilities' && error instanceof BeatAPIError) {
+    process.stderr.write(JSON.stringify({error:{message,code:error.code,status:error.status,request_id:error.requestId}})+'\n');
+  } else process.stderr.write(`beatapi: ${message}\n`);
   process.exitCode = exitCodeFor(error);
 }

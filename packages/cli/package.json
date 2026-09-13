@@ -1,6 +1,6 @@
 {
   "name": "beatapi",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Command-line interface for BeatAPI async and realtime AI video APIs.",
   "type": "module",
   "bin": {
@@ -19,7 +19,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "beatapi-client": "0.2.0",
+    "beatapi-client": "0.3.0",
     "cross-keychain": "1.1.0"
   },
   "engines": {

@@ -7,6 +7,18 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Prepare 0.3.0: unified capabilities Search, Inspect, Run and status in the
+  shared client and CLI, preserving existing commands.
+- Anonymous discovery, partial-contract warnings, stable start idempotency keys,
+  bounded status polling, non-overwriting JSON output and structured API errors.
+- HTTP-boundary tests and a live read-only Search/Inspect smoke check.
+
+### Fixed
+
+- Update the development YAML parser to 4.3.2; dependency audit reports no known vulnerabilities.
+
 ## [0.2.0] - 2026-07-31
 
 ### Added

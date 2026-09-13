@@ -2,6 +2,23 @@
 
 Official BeatAPI command-line interface for people, scripts, and AI agents.
 
+The 0.3.0 source adds unified capability commands (check the installed `--help`
+and npm availability before use):
+
+```sh
+beatapi capabilities search --query image --kind model --limit 5
+beatapi capabilities inspect <reference-returned-by-search>
+beatapi capabilities run <inspected-reference> --file input.json --idempotency-key <unique-task-key>
+beatapi capabilities status <same-reference> <returned-task-id> --wait
+```
+
+Search/Inspect are anonymous and do not validate the key. Run `auth status` for
+that. Partial contracts require the official API docs; the CLI never fills missing
+parameters. Starts may spend money. Reuse the same idempotency key/input on retry.
+Synchronous Data results return immediately and need no polling. All capability
+commands support `--output <new-file.json>` without overwriting existing files.
+See the [capability guide](https://github.com/BeatAPI/beatapi-cli/blob/main/docs/capabilities.md).
+
 ```bash
 npm install --global beatapi
 beatapi auth login
