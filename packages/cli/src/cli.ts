@@ -19,12 +19,18 @@ import {
 } from "./credentials.js";
 import { promptSecret as defaultPromptSecret } from "./prompt.js";
 import { persistWebhookSecret } from "./webhook-secrets.js";
+import { runCapabilities, type CapabilityClient } from './capabilities.js';
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
 const HELP = `BeatAPI CLI ${VERSION}
 
 Usage:
+  beatapi capabilities search [--query <text>] [--kind <model|data|workflow>] [--platform <name>] [--limit <1-50>] [--cursor <cursor>]
+  beatapi capabilities inspect <reference>
+  beatapi capabilities run <reference> --file <input.json> [--idempotency-key <key>]
+  beatapi capabilities status <reference> <task-id> [--wait] [--interval <ms>] [--attempts <count>]
+  All capabilities commands accept --output <new-file.json> (never overwrites).
   beatapi auth login|status|logout
   beatapi workflows list
   beatapi usage
@@ -56,7 +62,7 @@ Environment:
 
 type Writable = (text: string) => void;
 
-interface ClientLike {
+interface ClientLike extends Partial<CapabilityClient> {
   listWorkflows(): Promise<unknown>;
   getUsage(): Promise<unknown>;
   getTask(taskId: string): Promise<unknown>;
@@ -237,6 +243,9 @@ export async function run(
   }
 
   const [resource, action, firstIdentifier, secondIdentifier] = args;
+  if(resource==='capabilities' && (action==='search'||action==='inspect')) {
+    return runCapabilities(args.slice(1),createClient(undefined) as CapabilityClient,stdout,stderr);
+  }
 
   if (resource === "auth" && action === "login") {
     const apiKey = (await promptSecret()).trim();
@@ -286,6 +295,7 @@ export async function run(
     );
   }
   const client = createClient(resolved.apiKey);
+  if(resource==='capabilities') return runCapabilities(args.slice(1),client as CapabilityClient,stdout,stderr);
 
   if (resource === "usage" && action === undefined) {
     printJson(await client.getUsage(), stdout);
