@@ -1,7 +1,7 @@
 {
   "name": "beatapi",
   "version": "0.3.0",
-  "description": "Command-line interface for BeatAPI models, Social Data, and workflows.",
+  "description": "Command-line interface for routing BeatAPI Model, Data, Tool, and Workspace capabilities.",
   "type": "module",
   "bin": {
     "beatapi": "dist/bin.js"

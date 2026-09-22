@@ -1,7 +1,7 @@
 {
   "name": "beatapi-client",
   "version": "0.3.0",
-  "description": "Type-safe JavaScript and TypeScript client for BeatAPI models, data, and workflows.",
+  "description": "Type-safe JavaScript and TypeScript SDK for BeatAPI capability routing.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

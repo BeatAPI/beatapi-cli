@@ -2,7 +2,7 @@
   "name": "beatapi-cli-workspace",
   "version": "0.3.0",
   "private": true,
-  "description": "Official CLI and TypeScript client for BeatAPI models, Social Data, and workflows.",
+  "description": "Official CLI and TypeScript SDK for BeatAPI, the Agent Router for Everything.",
   "type": "module",
   "workspaces": [
     "packages/*"

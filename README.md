@@ -1,9 +1,26 @@
-# BeatAPI CLI and TypeScript Client
+<p align="center">
+  <img src="assets/readme/cover.svg" alt="BeatAPI CLI and TypeScript SDK — route Agent capabilities from terminal and code" width="100%" />
+</p>
 
-Official command-line interface and TypeScript client for BeatAPI's Model,
-Data, and Workflow capabilities. Version 0.3.0 provides the unified Search,
-Inspect, Run, and status commands while preserving the existing media,
-workflow, task, webhook, and Realtime commands.
+<p align="center">
+  <a href="https://beatapi.io/"><strong>Explore BeatAPI</strong></a> ·
+  <a href="https://beatapi.io/dashboard/apikeys">Create an API key</a> ·
+  <a href="https://docs.beatapi.io/">Docs</a> ·
+  <a href="#install-the-cli">Install</a> ·
+  <a href="#command-reference">Commands</a>
+</p>
+
+# BeatAPI CLI and TypeScript SDK
+
+BeatAPI is the **Agent Router for Everything**: one route to Model, Data, Tool,
+and Workspace capabilities. This repository provides the official terminal and
+TypeScript interfaces, including the unified Search, Inspect, Run, and status
+loop.
+
+```bash
+npm install --global beatapi
+beatapi capabilities search --query video --limit 5
+```
 
 The live catalog is intentionally not hardcoded into the packages. Discover
 current text, image, and video models plus 1,000+ Social Data actions at runtime,
@@ -19,6 +36,15 @@ The repository contains two independently publishable npm packages:
 Both packages are generated and tested against the reviewed OpenAPI snapshot in
 [`contract/beatapi.openapi.yaml`](./contract/beatapi.openapi.yaml). The lock file
 records the exact source commit and SHA-256 digest.
+
+## Where this repository fits
+
+```text
+Terminal or TypeScript app -> BeatAPI CLI / SDK -> BeatAPI -> Model · Data · Tool · Workspace
+```
+
+The packages route only capabilities exposed by the current BeatAPI catalog and
+public contract. They do not hardcode future catalog promises.
 
 ## Install the CLI
 
@@ -218,3 +244,7 @@ Release steps and ownership prerequisites are documented in
 ## License
 
 MIT
+
+<p align="center">
+  Built by <a href="https://beatapi.io/"><strong>BeatAPI</strong></a> — Agent Router for Everything.
+</p>
