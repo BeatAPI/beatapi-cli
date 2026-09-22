@@ -1,7 +1,7 @@
 {
   "name": "beatapi",
   "version": "0.3.0",
-  "description": "Command-line interface for BeatAPI async and realtime AI video APIs.",
+  "description": "Command-line interface for BeatAPI models, Social Data, and workflows.",
   "type": "module",
   "bin": {
     "beatapi": "dist/bin.js"
@@ -41,6 +41,8 @@
   "keywords": [
     "beatapi",
     "cli",
+    "agent-toolkit",
+    "social-data",
     "ai-video",
     "music-video",
     "ecommerce-video",

@@ -1,12 +1,14 @@
 # BeatAPI CLI and TypeScript Client
 
-Unified Model/Data/Workflow commands are documented in
-[the capability guide](docs/capabilities.md). The 0.3.0 source adds Search,
-Inspect, Run and status while preserving existing commands. Check npm release
-availability and installed `--help` before using these new commands.
+Official command-line interface and TypeScript client for BeatAPI's Model,
+Data, and Workflow capabilities. Version 0.3.0 provides the unified Search,
+Inspect, Run, and status commands while preserving the existing media,
+workflow, task, webhook, and Realtime commands.
 
-Official command-line interface and TypeScript client for BeatAPI's public
-asynchronous workflows and Realtime Video API.
+The live catalog is intentionally not hardcoded into the packages. Discover
+current text, image, and video models plus 1,000+ Social Data actions at runtime,
+then inspect the selected contract before execution. See
+[the capability guide](docs/capabilities.md).
 
 The repository contains two independently publishable npm packages:
 
@@ -71,6 +73,12 @@ stderr, so output can be piped to `jq`, saved, or consumed by automation.
 beatapi auth login
 beatapi auth status
 beatapi auth logout
+
+beatapi capabilities search --query image --kind model --limit 5
+beatapi capabilities search --query search --kind data --platform twitter --limit 5
+beatapi capabilities inspect REFERENCE
+beatapi capabilities run REFERENCE --file ./input.json --idempotency-key REQUEST_KEY
+beatapi capabilities status REFERENCE TASK --wait
 
 beatapi workflows list
 beatapi usage
@@ -143,9 +151,12 @@ try {
 }
 ```
 
-The client exposes every public contract operation: workflows, usage, file
-upload, music-video automatic and manual composition, ecommerce-video tasks,
-task polling, webhook CRUD, and Realtime session create/get/close.
+The client exposes typed methods for capability discovery and execution,
+workflows, usage, file upload, music-video automatic and manual composition,
+ecommerce-video tasks, task polling, webhook CRUD, and Realtime session
+create/get/close. Generated request and response types track the complete
+reviewed public OpenAPI contract, including newer onboarding and capability
+routes even when a convenience method is not provided.
 
 Create Realtime sessions only on a trusted server. The returned `client_secret`
 is short lived and may be handed to the browser SDK; never expose the long-lived

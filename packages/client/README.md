@@ -1,7 +1,7 @@
 # beatapi-client
 
-Official TypeScript client for the public BeatAPI asynchronous and Realtime
-Video APIs.
+Official TypeScript client for BeatAPI Model, Data, Workflow, asynchronous
+media, and Realtime APIs.
 
 ```bash
 npm install beatapi-client

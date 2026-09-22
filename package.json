@@ -2,7 +2,7 @@
   "name": "beatapi-cli-workspace",
   "version": "0.3.0",
   "private": true,
-  "description": "Official TypeScript client and CLI for BeatAPI async and realtime AI video APIs.",
+  "description": "Official CLI and TypeScript client for BeatAPI models, Social Data, and workflows.",
   "type": "module",
   "workspaces": [
     "packages/*"

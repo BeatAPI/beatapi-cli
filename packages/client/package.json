@@ -1,7 +1,7 @@
 {
   "name": "beatapi-client",
   "version": "0.3.0",
-  "description": "Type-safe JavaScript and TypeScript client for BeatAPI async and realtime video APIs.",
+  "description": "Type-safe JavaScript and TypeScript client for BeatAPI models, data, and workflows.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -39,6 +39,8 @@
   "homepage": "https://docs.beatapi.io/",
   "keywords": [
     "beatapi",
+    "agent-toolkit",
+    "social-data",
     "ai-video",
     "music-video",
     "ecommerce-video",

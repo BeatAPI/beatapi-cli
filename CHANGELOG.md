@@ -7,6 +7,15 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Synchronize the reviewed OpenAPI contract with current capability, Social
+  Data, onboarding, model, media, Effect, Workflow, and Realtime routes.
+- Reframe package documentation around the live Model/Data/Workflow catalog;
+  model and action IDs remain dynamically discovered rather than hardcoded.
+
+## [0.3.0] - 2026-09-13
+
 ### Added
 
 - Prepare 0.3.0: unified capabilities Search, Inspect, Run and status in the
@@ -57,7 +66,8 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Structured errors, request IDs, bounded retries, CI, package checks, and npm
   release automation.
 
-[Unreleased]: https://github.com/BeatAPI/beatapi-cli/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/BeatAPI/beatapi-cli/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/BeatAPI/beatapi-cli/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/BeatAPI/beatapi-cli/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/BeatAPI/beatapi-cli/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/BeatAPI/beatapi-cli/releases/tag/v0.1.0

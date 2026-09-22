@@ -1,8 +1,8 @@
 # Unified capabilities (0.3.0)
 
-These commands are implemented in this checkout. Publish both `beatapi-client`
-and `beatapi` before advertising them as available from npm. Check the installed
-`beatapi --version` and `beatapi --help`; 0.2.0 does not have these commands.
+These commands are available in the published `beatapi` 0.3.0 CLI and
+`beatapi-client` 0.3.0 package. Check `beatapi --version` and installed `--help`
+when diagnosing an older installation; 0.2.0 does not have these commands.
 
 ## Read-only setup and discovery
 
@@ -61,21 +61,19 @@ supported. CLI key storage does not configure an unrelated MCP host's credential
 
 This additive capability surface follows the gateway's public three-tool manifest
 at https://beatapi.io/capabilities-mcp-tools.json and observed REST envelopes.
-The existing generated OpenAPI snapshot remains unchanged. Public capability
-projections are typed separately and keep incomplete schema fields optional;
-they do not claim the gateway provides a complete input or output contract.
+The generated OpenAPI snapshot now includes capability, Social Data, and
+onboarding routes. Public capability projections keep incomplete schema fields
+optional; they do not claim every gateway entry provides a complete input or
+output contract.
 
 Verification: HTTP-boundary tests cover discovery, partial schema handling,
 same-key start retries, status routing, synchronous results and bounded polling.
 No paid end-to-end result is implied by those tests. Live smoke should first run
 Search/Inspect; a real paid example needs its own recorded result and authorization.
 
-### Recorded read-only live example
+### Current catalog behavior
 
-The built 0.3.0 binary was run against the production API with
-`capabilities search --query image --kind model --limit 1`. It returned
-`model:gpt-image-2` and cursor `1`. Inspect of that returned reference succeeded
-and preserved `validation.state: partial` plus `input_modes: [text, image]`,
-printing the missing-contract warning separately from JSON. This proves discovery
-and inspection, not image generation. The result ID is an observation, not a
-permanent default; search again when performing a user task.
+As verified on 2026-09-22, production Search returned 60 Model capabilities,
+1,000+ Data actions, and three Workflows when fully paginated. This is a dated
+observation, not a package constant or availability promise. Search again for
+every user task and choose only a current returned reference.

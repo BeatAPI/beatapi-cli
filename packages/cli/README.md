@@ -1,9 +1,10 @@
 # beatapi
 
 Official BeatAPI command-line interface for people, scripts, and AI agents.
+Discover current Model, Data, and Workflow capabilities instead of relying on
+a copied model list.
 
-The 0.3.0 source adds unified capability commands (check the installed `--help`
-and npm availability before use):
+Version 0.3.0 adds unified capability commands:
 
 ```sh
 beatapi capabilities search --query image --kind model --limit 5
