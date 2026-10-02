@@ -1,5 +1,12 @@
 import { BeatAPIError } from "./errors.js";
-import { assertCapabilityReference, type CapabilitySearchInput, type CapabilityPage, type CapabilityContract } from './capabilities.js';
+import {
+  assertCapabilityReference,
+  type CapabilitySearchInput,
+  type CapabilityPage,
+  type CapabilityContract,
+  type CapabilityView,
+  type CapabilityResult,
+} from "./capabilities.js";
 import type { components, operations } from "./types.generated.js";
 
 export type BeatAPIWorkflow = components["schemas"]["Workflow"];
@@ -13,7 +20,8 @@ export type BeatAPIWebhook = components["schemas"]["WebhookEndpoint"];
 export type BeatAPIRealtimeSession = components["schemas"]["RealtimeSession"];
 export type BeatAPIGenerationModel = components["schemas"]["GenerationModel"];
 export type BeatAPIEffect = components["schemas"]["Effect"];
-export type BeatAPIDeleteResult = components["schemas"]["DeleteResponse"]["data"];
+export type BeatAPIDeleteResult =
+  components["schemas"]["DeleteResponse"]["data"];
 
 export type MusicVideoTaskInput =
   operations["createMusicVideoTask"]["requestBody"]["content"]["application/json"];
@@ -31,7 +39,8 @@ export type CreateRealtimeSessionInput =
   operations["createRealtimeSession"]["requestBody"]["content"]["application/json"];
 export type TextResponseInput =
   operations["createTextResponse"]["requestBody"]["content"]["application/json"];
-export type TextResponseOutput = components["schemas"]["TextPassthroughResponse"];
+export type TextResponseOutput =
+  components["schemas"]["TextPassthroughResponse"];
 export type VideoAnalysisTaskInput =
   operations["createVideoAnalysisTask"]["requestBody"]["content"]["application/json"];
 export type ImageGenerationTaskInput =
@@ -57,6 +66,7 @@ export interface BeatAPIClientOptions {
   baseUrl?: string | undefined;
   allowInsecureLocalhost?: boolean | undefined;
   trustCustomBaseUrl?: boolean | undefined;
+  clientDialect?: "mcp" | undefined;
   fetch?: FetchLike | undefined;
   sleep?: ((milliseconds: number) => Promise<void>) | undefined;
   random?: (() => number) | undefined;
@@ -69,6 +79,7 @@ interface RequestOptions {
   authenticated?: boolean | undefined;
   responseShape?: "beatapi" | "raw" | undefined;
   retry?: RetryOptions | undefined;
+  timeoutMs?: number;
 }
 
 export interface WaitForTaskOptions {
@@ -85,6 +96,7 @@ export interface UploadFileOptions {
 
 interface ErrorEnvelope {
   error?: {
+    retryable?: boolean;
     code?: string;
     message?: string;
     request_id?: string;
@@ -118,7 +130,8 @@ function validatedBaseUrl(
   const isLoopback = ["localhost", "127.0.0.1", "[::1]"].includes(
     parsed.hostname,
   );
-  const insecureTestOrigin = options.allowInsecureLocalhost === true && isLoopback;
+  const insecureTestOrigin =
+    options.allowInsecureLocalhost === true && isLoopback;
   if (
     (parsed.protocol !== "https:" && !insecureTestOrigin) ||
     parsed.username ||
@@ -171,10 +184,7 @@ async function readPayload(response: Response): Promise<unknown> {
   }
 }
 
-function errorFromResponse(
-  response: Response,
-  payload: unknown,
-): BeatAPIError {
+function errorFromResponse(response: Response, payload: unknown): BeatAPIError {
   const envelope =
     typeof payload === "object" && payload !== null
       ? (payload as ErrorEnvelope)
@@ -187,6 +197,7 @@ function errorFromResponse(
     error?.message || `BeatAPI request failed with HTTP ${response.status}.`,
     {
       status: response.status,
+      retryable: error?.retryable,
       code: error?.code,
       requestId: error?.request_id,
       retryAfterSeconds,
@@ -217,6 +228,7 @@ function encodePathSegment(value: string): string {
 export class BeatAPIClient {
   readonly apiKey: string | undefined;
   readonly baseUrl: string;
+  private readonly clientDialect: "mcp" | undefined;
   private readonly fetchImpl: FetchLike;
   private readonly sleep: (milliseconds: number) => Promise<void>;
   private readonly random: () => number;
@@ -231,6 +243,7 @@ export class BeatAPIClient {
     if (typeof fetchImpl !== "function") {
       throw new Error("A Fetch API implementation is required.");
     }
+    this.clientDialect = options.clientDialect;
     this.fetchImpl = fetchImpl.bind(globalThis);
     this.sleep =
       options.sleep ??
@@ -260,6 +273,7 @@ export class BeatAPIClient {
     assertPositiveInteger(maxDelayMs, "retry.maxDelayMs");
 
     const headers = new Headers({ accept: "application/json" });
+    if (this.clientDialect) headers.set("x-beat-client", this.clientDialect);
     if (authenticated) headers.set("authorization", `Bearer ${this.apiKey}`);
     for (const [name, value] of new Headers(options.headers)) {
       headers.set(name, value);
@@ -278,7 +292,10 @@ export class BeatAPIClient {
         const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
           method,
           headers,
-          ...(path.startsWith('/v1/capabilities/') ? {redirect:'error' as const,signal:AbortSignal.timeout(35000)} : {}),
+          redirect: "error",
+          ...(options.timeoutMs || path.startsWith("/v1/capabilities/")
+            ? { signal: AbortSignal.timeout(options.timeoutMs ?? 35_000) }
+            : {}),
           ...(body === undefined ? {} : { body }),
         });
         const payload = await readPayload(response);
@@ -293,6 +310,7 @@ export class BeatAPIClient {
         if (
           attempt >= maxAttempts ||
           !RETRYABLE_STATUS_CODES.has(response.status) ||
+          error.retryable === false ||
           error.code === "user_concurrency_exceeded"
         ) {
           throw error;
@@ -333,28 +351,160 @@ export class BeatAPIClient {
     });
   }
 
-  searchCapabilities(input: CapabilitySearchInput = {}): Promise<CapabilityPage> {
-    if (input.limit !== undefined && (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 50)) throw new TypeError('limit must be an integer from 1 to 50.');
-    if (input.kind !== undefined && !['model', 'data', 'workflow'].includes(input.kind)) throw new TypeError('Invalid capability kind.');
-    return this.request('/v1/capabilities/search', {method: 'POST', body: input, authenticated: false});
+  searchCapabilities(
+    input: CapabilitySearchInput = {},
+  ): Promise<CapabilityPage> {
+    if (
+      input.limit !== undefined &&
+      (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 50)
+    )
+      throw new TypeError("limit must be an integer from 1 to 50.");
+    if (
+      input.kind !== undefined &&
+      !["model", "data", "workflow"].includes(input.kind)
+    )
+      throw new TypeError("Invalid capability kind.");
+    return this.request("/v1/capabilities/search", {
+      method: "POST",
+      body: input,
+      authenticated: false,
+    });
   }
 
   inspectCapability(reference: string): Promise<CapabilityContract> {
     assertCapabilityReference(reference);
-    return this.request('/v1/capabilities/inspect', {method: 'POST', body: {reference}, authenticated: false});
+    return this.request("/v1/capabilities/inspect", {
+      method: "POST",
+      body: { reference },
+      authenticated: false,
+    });
   }
 
-  runCapability(reference: string, input: Record<string, unknown>, options: {idempotencyKey: string; retry?: RetryOptions}): Promise<Record<string, unknown>> {
+  runCapability(
+    reference: string,
+    input: Record<string, unknown>,
+    options: CapabilityView & { idempotencyKey: string; retry?: RetryOptions },
+  ): Promise<CapabilityResult> {
     assertCapabilityReference(reference);
-    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new TypeError('input must be a JSON object.');
-    if (!options.idempotencyKey.trim() || options.idempotencyKey.length > 255 || /[\r\n]/.test(options.idempotencyKey)) throw new TypeError('idempotencyKey must contain 1-255 characters without newlines.');
-    return this.request('/v1/capabilities/run', {method:'POST', body:{reference,operation:'start',input,idempotency_key:options.idempotencyKey},headers:{'idempotency-key':options.idempotencyKey},retry:options.retry});
+    if (!input || typeof input !== "object" || Array.isArray(input))
+      throw new TypeError("input must be a JSON object.");
+    if (
+      !options.idempotencyKey.trim() ||
+      options.idempotencyKey.length > 255 ||
+      /[\r\n]/.test(options.idempotencyKey)
+    )
+      throw new TypeError(
+        "idempotencyKey must contain 1-255 characters without newlines.",
+      );
+    const { idempotencyKey, retry, ...view } = options;
+    return this.capabilityRequest(
+      {
+        reference,
+        operation: "start",
+        input,
+        idempotency_key: idempotencyKey,
+        ...view,
+      },
+      {
+        headers: { "idempotency-key": idempotencyKey },
+        ...(reference === "data:web.research" ? {} : { retry }),
+        timeoutMs: 95_000,
+      },
+    );
   }
 
-  getCapabilityStatus(reference: string, taskId: string): Promise<Record<string, unknown>> {
+  getCapabilityStatus(
+    reference: string,
+    taskId: string,
+    view: CapabilityView = {},
+  ): Promise<CapabilityResult> {
     assertCapabilityReference(reference);
-    if (!taskId.trim()) throw new TypeError('task_id is required.');
-    return this.request('/v1/capabilities/run', {method:'POST',body:{reference,operation:'status',task_id:taskId},retry:{maxAttempts:3}});
+    if (!taskId.trim()) throw new TypeError("task_id is required.");
+    return this.capabilityRequest(
+      { reference, operation: "status", task_id: taskId, ...view },
+      { retry: { maxAttempts: 3 } },
+    );
+  }
+
+  getCapabilityResult(
+    reference: string,
+    requestId: string,
+    view: CapabilityView = {},
+  ): Promise<CapabilityResult> {
+    assertCapabilityReference(reference);
+    if (!requestId.trim()) throw new TypeError("request_id is required.");
+    return this.capabilityRequest(
+      { reference, operation: "result", request_id: requestId, ...view },
+      { retry: { maxAttempts: 3 } },
+    );
+  }
+
+  private async capabilityRequest(
+    body: Record<string, unknown>,
+    options: RequestOptions = {},
+  ): Promise<CapabilityResult> {
+    const reply = await this.request<Record<string, unknown>>(
+      "/v1/capabilities/run",
+      { method: "POST", body, responseShape: "raw", ...options },
+    );
+    // Sync data is a raw result. Async tasks are wrapped in data with next alongside it.
+    if (
+      !reply.object &&
+      reply.data &&
+      typeof reply.data === "object" &&
+      !Array.isArray(reply.data)
+    ) {
+      return {
+        ...reply.data,
+        ...(reply.next ? { next: reply.next } : {}),
+      } as CapabilityResult;
+    }
+    return reply as CapabilityResult;
+  }
+
+  searchWeb(
+    input: Pick<components["schemas"]["WebSearchRequest"], "query"> &
+      Partial<components["schemas"]["WebSearchRequest"]>,
+  ): Promise<components["schemas"]["WebSearchResponse"]> {
+    return this.request("/v1/web/search", {
+      method: "POST",
+      body: input,
+      responseShape: "raw",
+      timeoutMs: 35_000,
+    });
+  }
+  readWebPages(
+    input: Pick<components["schemas"]["WebReadRequest"], "urls"> &
+      Partial<components["schemas"]["WebReadRequest"]>,
+  ): Promise<components["schemas"]["WebReadResponse"]> {
+    return this.request("/v1/web/read", {
+      method: "POST",
+      body: input,
+      responseShape: "raw",
+      timeoutMs: 75_000,
+    });
+  }
+  mapWebsite(
+    input: Pick<components["schemas"]["WebMapRequest"], "url"> &
+      Partial<components["schemas"]["WebMapRequest"]>,
+  ): Promise<components["schemas"]["WebMapResponse"]> {
+    return this.request("/v1/web/map", {
+      method: "POST",
+      body: input,
+      responseShape: "raw",
+      timeoutMs: 60_000,
+    });
+  }
+  researchWeb(
+    input: Pick<components["schemas"]["WebResearchRequest"], "query"> &
+      Partial<components["schemas"]["WebResearchRequest"]>,
+  ): Promise<components["schemas"]["WebResearchResponse"] | CapabilityResult> {
+    return this.request("/v1/web/research", {
+      method: "POST",
+      body: input,
+      responseShape: "raw",
+      timeoutMs: 95_000,
+    });
   }
 
   listWorkflows(): Promise<BeatAPIWorkflow[]> {
@@ -362,6 +512,15 @@ export class BeatAPIClient {
       "/v1/workflows",
       { authenticated: false },
     ).then((result) => result.data);
+  }
+
+  async listPublicTextModels(): Promise<
+    components["schemas"]["PublicTextModel"][]
+  > {
+    const list = await this.request<{
+      data: components["schemas"]["PublicTextModel"][];
+    }>("/v1/text/models", { authenticated: false });
+    return list.data;
   }
 
   listTextModels(): Promise<BeatAPITextModel[]> {
@@ -378,12 +537,30 @@ export class BeatAPIClient {
     ).then((result) => result.data);
   }
 
-  createImageTask(input: ImageGenerationTaskInput): Promise<BeatAPITask> {
-    return this.request("/v1/images/tasks", { method: "POST", body: input });
+  createImageTask(
+    input: ImageGenerationTaskInput,
+    options: { idempotencyKey?: string } = {},
+  ): Promise<BeatAPITask> {
+    return this.request("/v1/images/tasks", {
+      method: "POST",
+      body: input,
+      ...(options.idempotencyKey
+        ? { headers: { "idempotency-key": options.idempotencyKey } }
+        : {}),
+    });
   }
 
-  createVideoTask(input: VideoGenerationTaskInput): Promise<BeatAPITask> {
-    return this.request("/v1/videos/tasks", { method: "POST", body: input });
+  createVideoTask(
+    input: VideoGenerationTaskInput,
+    options: { idempotencyKey?: string } = {},
+  ): Promise<BeatAPITask> {
+    return this.request("/v1/videos/tasks", {
+      method: "POST",
+      body: input,
+      ...(options.idempotencyKey
+        ? { headers: { "idempotency-key": options.idempotencyKey } }
+        : {}),
+    });
   }
 
   listEffects(
@@ -442,8 +619,10 @@ export class BeatAPIClient {
     });
   }
 
-  getUsage(): Promise<BeatAPIUsage> {
-    return this.request("/v1/usage");
+  getUsage(period?: "all" | "24h" | "7d" | "30d"): Promise<BeatAPIUsage> {
+    if (period && !["all", "24h", "7d", "30d"].includes(period))
+      throw new TypeError("Invalid usage period.");
+    return this.request(period ? "/v1/usage?period=" + period : "/v1/usage");
   }
 
   createRealtimeSession(

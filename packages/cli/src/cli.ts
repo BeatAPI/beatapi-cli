@@ -7,6 +7,9 @@ import {
   type BeatAPITask,
   type CreateWebhookInput,
   type CreateRealtimeSessionInput,
+  type ImageGenerationTaskInput,
+  type VideoGenerationTaskInput,
+  type CreateEffectTaskInput,
   type EcommerceVideoTaskInput,
   type MusicVideoTaskInput,
   type UpdateWebhookInput,
@@ -19,21 +22,26 @@ import {
 } from "./credentials.js";
 import { promptSecret as defaultPromptSecret } from "./prompt.js";
 import { persistWebhookSecret } from "./webhook-secrets.js";
-import { runCapabilities, type CapabilityClient } from './capabilities.js';
+import { runCapabilities, type CapabilityClient } from "./capabilities.js";
 
-export const VERSION = "0.3.0";
+export const VERSION = "0.4.0";
 
 const HELP = `BeatAPI CLI ${VERSION}
 
 Usage:
   beatapi capabilities search [--query <text>] [--kind <model|data|workflow>] [--platform <name>] [--limit <1-50>] [--cursor <cursor>]
+  beatapi capabilities result <reference> <request-id> [--fields <json-array>]
+  beatapi images|videos|effects create --file <input.json> [--idempotency-key <key>]
+  beatapi web search|read|map|research --file <input.json>
   beatapi capabilities inspect <reference>
   beatapi capabilities run <reference> --file <input.json> [--idempotency-key <key>]
   beatapi capabilities status <reference> <task-id> [--wait] [--interval <ms>] [--attempts <count>]
+  Search accepts --view compact|full and --group-by function.
+  Run/status/result accept --view full|preview, --max-items 1-50 and --fields <json-array>.
   All capabilities commands accept --output <new-file.json> (never overwrites).
   beatapi auth login|status|logout
   beatapi workflows list
-  beatapi usage
+  beatapi usage [--period <all|24h|7d|30d>]
   beatapi files upload <path>
   beatapi music-video create --file <input.json>
   beatapi music-video shots edit <task-id> <shot-id> --prompt <text>
@@ -62,9 +70,22 @@ Environment:
 
 type Writable = (text: string) => void;
 
-interface ClientLike extends Partial<CapabilityClient> {
+interface ClientLike
+  extends Partial<
+    CapabilityClient &
+      Pick<
+        BeatAPIClient,
+        | "searchWeb"
+        | "readWebPages"
+        | "mapWebsite"
+        | "researchWeb"
+        | "createImageTask"
+        | "createVideoTask"
+        | "createEffectTask"
+      >
+  > {
   listWorkflows(): Promise<unknown>;
-  getUsage(): Promise<unknown>;
+  getUsage(period?: "all" | "24h" | "7d" | "30d"): Promise<unknown>;
   getTask(taskId: string): Promise<unknown>;
   waitForTask(
     taskId: string,
@@ -82,7 +103,12 @@ interface ClientLike extends Partial<CapabilityClient> {
   editMusicVideoShot(
     taskId: string,
     shotId: string,
-    input: { prompt: string; duration?: number; quality?: "standard" | "high"; resolution?: "540p" | "720p" | "1080p" },
+    input: {
+      prompt: string;
+      duration?: number;
+      quality?: "standard" | "high";
+      resolution?: "540p" | "720p" | "1080p";
+    },
   ): Promise<unknown>;
   getMusicVideoShotMedia(taskId: string, shotId: string): Promise<unknown>;
   composeMusicVideoTask(
@@ -205,7 +231,8 @@ function printJson(value: unknown, stdout: Writable): void {
 }
 
 function requireIdentifier(value: string | undefined, label: string): string {
-  if (!value || value.startsWith("--")) throw new Error(`${label} is required.`);
+  if (!value || value.startsWith("--"))
+    throw new Error(`${label} is required.`);
   return value;
 }
 
@@ -218,6 +245,7 @@ function defaultCreateClient(
     baseUrl: env.BEATAPI_BASE_URL,
     allowInsecureLocalhost: env.BEATAPI_ALLOW_INSECURE_LOCALHOST === "1",
     trustCustomBaseUrl: env.BEATAPI_TRUST_CUSTOM_BASE_URL === "1",
+    clientDialect: env.BEATAPI_CLIENT_DIALECT === "mcp" ? "mcp" : undefined,
   });
 }
 
@@ -243,14 +271,22 @@ export async function run(
   }
 
   const [resource, action, firstIdentifier, secondIdentifier] = args;
-  if(resource==='capabilities' && (action==='search'||action==='inspect')) {
-    return runCapabilities(args.slice(1),createClient(undefined) as CapabilityClient,stdout,stderr);
+  if (
+    resource === "capabilities" &&
+    (action === "search" || action === "inspect")
+  ) {
+    return runCapabilities(
+      args.slice(1),
+      createClient(undefined) as CapabilityClient,
+      stdout,
+      stderr,
+    );
   }
 
   if (resource === "auth" && action === "login") {
     const apiKey = (await promptSecret()).trim();
-    if (!apiKey.startsWith("sk_") || apiKey.length < 8) {
-      throw new Error("The API key must be a BeatAPI key beginning with sk_.");
+    if (apiKey.length < 6 || /\s/.test(apiKey)) {
+      throw new Error("Enter a valid BeatAPI API key without whitespace.");
     }
     const usage = await createClient(apiKey).getUsage();
     await store.set(apiKey);
@@ -273,10 +309,9 @@ export async function run(
     return 0;
   }
 
-  const resolved =
-    options.apiKey?.trim()
-      ? { apiKey: options.apiKey.trim(), source: "explicit" as const }
-      : await resolveApiKey({ env, store });
+  const resolved = options.apiKey?.trim()
+    ? { apiKey: options.apiKey.trim(), source: "explicit" as const }
+    : await resolveApiKey({ env, store });
 
   if (resource === "auth" && action === "status") {
     if (!resolved) {
@@ -295,17 +330,51 @@ export async function run(
     );
   }
   const client = createClient(resolved.apiKey);
-  if(resource==='capabilities') return runCapabilities(args.slice(1),client as CapabilityClient,stdout,stderr);
-
-  if (resource === "usage" && action === undefined) {
-    printJson(await client.getUsage(), stdout);
+  if (resource === "capabilities")
+    return runCapabilities(
+      args.slice(1),
+      client as CapabilityClient,
+      stdout,
+      stderr,
+    );
+  if (resource === "web") {
+    const methods = {
+      search: "searchWeb",
+      read: "readWebPages",
+      map: "mapWebsite",
+      research: "researchWeb",
+    } as const;
+    if (!action || !(action in methods))
+      throw Error("Use web search, read, map or research.");
+    if (args.length !== 4 || args[2] !== "--file" || !args[3])
+      throw Error("Use --file <input.json>.");
+    const input: unknown = JSON.parse(await readFile(args[3], "utf8"));
+    if (!input || typeof input !== "object" || Array.isArray(input))
+      throw Error("Input must be a JSON object.");
+    const method = client[methods[action as keyof typeof methods]];
+    if (!method)
+      throw Error("This client does not support Web tools. Update beatapi.");
+    printJson(
+      await (method as (input: object) => Promise<unknown>).call(client, input),
+      stdout,
+    );
     return 0;
   }
 
-  if (
-    (resource === "files" || resource === "file") &&
-    action === "upload"
-  ) {
+  if (resource === "usage") {
+    if (args.length !== 1 && (args.length !== 3 || action !== "--period"))
+      throw Error("Use usage [--period all|24h|7d|30d].");
+    const period = flagValue(args, "--period");
+    if (period && !["all", "24h", "7d", "30d"].includes(period))
+      throw Error("Invalid usage period.");
+    printJson(
+      await client.getUsage(period as "all" | "24h" | "7d" | "30d" | undefined),
+      stdout,
+    );
+    return 0;
+  }
+
+  if ((resource === "files" || resource === "file") && action === "upload") {
     const path = requireIdentifier(firstIdentifier, "File path");
     const extension = extname(path).toLowerCase();
     const mimeType = MIME_TYPES[extension];
@@ -321,6 +390,38 @@ export async function run(
       }),
       stdout,
     );
+    return 0;
+  }
+
+  if (
+    ["images", "videos", "effects"].includes(resource ?? "") &&
+    action === "create"
+  ) {
+    const input = await readJson<
+      ImageGenerationTaskInput &
+        VideoGenerationTaskInput &
+        CreateEffectTaskInput
+    >(inputFile(args));
+    const idempotencyKey = flagValue(args, "--idempotency-key") ?? randomUUID();
+    if (resource === "images") {
+      if (!client.createImageTask) throw Error("Update the BeatAPI client.");
+      printJson(
+        await client.createImageTask(input, { idempotencyKey }),
+        stdout,
+      );
+    } else if (resource === "videos") {
+      if (!client.createVideoTask) throw Error("Update the BeatAPI client.");
+      printJson(
+        await client.createVideoTask(input, { idempotencyKey }),
+        stdout,
+      );
+    } else {
+      if (!client.createEffectTask) throw Error("Update the BeatAPI client.");
+      printJson(
+        await client.createEffectTask(input, { idempotencyKey }),
+        stdout,
+      );
+    }
     return 0;
   }
 
@@ -397,8 +498,7 @@ export async function run(
     };
     printJson(
       await client.createRealtimeSession(input, {
-        idempotencyKey:
-          flagValue(args, "--idempotency-key") ?? randomUUID(),
+        idempotencyKey: flagValue(args, "--idempotency-key") ?? randomUUID(),
       }),
       stdout,
     );
@@ -433,10 +533,7 @@ export async function run(
     return 0;
   }
 
-  if (
-    (resource === "tasks" || resource === "task") &&
-    action === "get"
-  ) {
+  if ((resource === "tasks" || resource === "task") && action === "get") {
     printJson(
       await client.getTask(requireIdentifier(firstIdentifier, "Task ID")),
       stdout,
@@ -444,10 +541,7 @@ export async function run(
     return 0;
   }
 
-  if (
-    (resource === "tasks" || resource === "task") &&
-    action === "wait"
-  ) {
+  if ((resource === "tasks" || resource === "task") && action === "wait") {
     const taskId = requireIdentifier(firstIdentifier, "Task ID");
     const intervalMs = positiveInteger(
       flagValue(args, "--interval"),

@@ -1,7 +1,7 @@
 {
   "name": "beatapi",
-  "version": "0.3.0",
-  "description": "Command-line interface for routing BeatAPI Model, Data, Tool, and Workspace capabilities.",
+  "version": "0.4.0",
+  "description": "Command-line interface for BeatAPI models, data, Web Search and workflows.",
   "type": "module",
   "bin": {
     "beatapi": "dist/bin.js"
@@ -19,7 +19,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "beatapi-client": "0.3.0",
+    "beatapi-client": "0.4.0",
     "cross-keychain": "1.1.0"
   },
   "engines": {

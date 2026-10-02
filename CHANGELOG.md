@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 — 2026-10-02
+
+- Update the current public OpenAPI and generated types; support raw sync data, async next instructions, preview/fields, stored-result reads and four Web operations. Accept current gateway key formats.
+
+
 All notable changes to this project will be documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

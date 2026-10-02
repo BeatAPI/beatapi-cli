@@ -31,5 +31,13 @@ export {
   type WaitForTaskOptions,
 } from "./client.js";
 export { BeatAPIError, type BeatAPIErrorOptions } from "./errors.js";
-export type { CapabilityKind, CapabilitySearchInput, CapabilityPage, CapabilityContract } from './capabilities.js';
+export type {
+  CapabilityKind,
+  CapabilitySearchInput,
+  CapabilityPage,
+  CapabilityContract,
+  CapabilityNext,
+  CapabilityView,
+  CapabilityResult,
+} from "./capabilities.js";
 export type { components, operations, paths } from "./types.generated.js";

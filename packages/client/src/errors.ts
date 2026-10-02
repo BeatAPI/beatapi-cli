@@ -1,4 +1,5 @@
 export interface BeatAPIErrorOptions {
+  retryable?: boolean | undefined;
   status?: number | undefined;
   code?: string | undefined;
   requestId?: string | undefined;
@@ -8,6 +9,7 @@ export interface BeatAPIErrorOptions {
 }
 
 export class BeatAPIError extends Error {
+  readonly retryable: boolean | undefined;
   readonly status: number | undefined;
   readonly code: string | undefined;
   readonly requestId: string | undefined;
@@ -15,8 +17,12 @@ export class BeatAPIError extends Error {
   readonly details: unknown | undefined;
 
   constructor(message: string, options: BeatAPIErrorOptions = {}) {
-    super(message, options.cause === undefined ? undefined : { cause: options.cause });
+    super(
+      message,
+      options.cause === undefined ? undefined : { cause: options.cause },
+    );
     this.name = "BeatAPIError";
+    this.retryable = options.retryable;
     this.status = options.status;
     this.code = options.code;
     this.requestId = options.requestId;
