@@ -50,7 +50,7 @@ execution; see the [capability guide](docs/capabilities.md).
 | CLI | Terminal use, shell automation, and agents that run commands | `npm install --global beatapi` |
 | JavaScript / TypeScript SDK | Integrating BeatAPI into an application | `npm install beatapi-client` |
 | REST API | Direct HTTP requests from any language | [API docs](https://docs.beatapi.io/) |
-| MCP | Tool access from a compatible agent host | [BeatAPI MCP](https://beatapi.io/mcp) |
+| MCP | Tool access from a compatible agent host | [MCP / capability docs](https://docs.beatapi.io/capabilities) |
 
 MCP is a separate BeatAPI transport; this repository supplies the CLI and SDK.
 
