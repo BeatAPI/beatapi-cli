@@ -1,7 +1,7 @@
 {
   "name": "beatapi-client",
   "version": "0.4.0",
-  "description": "Type-safe JavaScript and TypeScript SDK for BeatAPI capability routing.",
+  "description": "Official JavaScript and TypeScript SDK for BeatAPI model, data, and workflow APIs, with capability discovery and task polling.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -39,14 +39,17 @@
   "homepage": "https://docs.beatapi.io/",
   "keywords": [
     "beatapi",
-    "agent-toolkit",
-    "social-data",
-    "ai-video",
-    "music-video",
-    "ecommerce-video",
-    "realtime-video",
+    "sdk",
     "typescript",
-    "sdk"
+    "javascript",
+    "api-client",
+    "ai-agents",
+    "ai-models",
+    "data-api",
+    "social-data",
+    "workflow",
+    "image-generation",
+    "video-generation"
   ],
   "license": "MIT"
 }

@@ -1,10 +1,5 @@
 # Changelog
 
-## 0.4.0 — 2026-10-02
-
-- Update the current public OpenAPI and generated types; support raw sync data, async next instructions, preview/fields, stored-result reads and four Web operations. Accept current gateway key formats.
-
-
 All notable changes to this project will be documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
@@ -12,10 +7,20 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-22
+
+### Added
+
+- Current capability result views, stored-result reads, four Web operations,
+  and direct image, video, and Effect task commands.
+- Support raw synchronous data, asynchronous next instructions, and current
+  gateway key formats.
+
 ### Changed
 
 - Synchronize the reviewed OpenAPI contract with current capability, Social
   Data, onboarding, model, media, Effect, Workflow, and Realtime routes.
+- Refresh npm descriptions and discovery keywords for both packages.
 - Reframe package documentation around the live Model/Data/Workflow catalog;
   model and action IDs remain dynamically discovered rather than hardcoded.
 
@@ -71,7 +76,8 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Structured errors, request IDs, bounded retries, CI, package checks, and npm
   release automation.
 
-[Unreleased]: https://github.com/BeatAPI/beatapi-cli/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/BeatAPI/beatapi-cli/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/BeatAPI/beatapi-cli/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/BeatAPI/beatapi-cli/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/BeatAPI/beatapi-cli/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/BeatAPI/beatapi-cli/compare/v0.1.0...v0.1.1

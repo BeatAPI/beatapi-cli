@@ -1,7 +1,7 @@
 {
   "name": "beatapi",
   "version": "0.4.0",
-  "description": "Command-line interface for BeatAPI models, data, Web Search and workflows.",
+  "description": "Official BeatAPI CLI to discover and run AI models, data APIs, and workflows from your terminal or AI agent.",
   "type": "module",
   "bin": {
     "beatapi": "dist/bin.js"
@@ -41,13 +41,16 @@
   "keywords": [
     "beatapi",
     "cli",
-    "agent-toolkit",
+    "ai-agents",
+    "agent-tools",
+    "ai-models",
+    "data-api",
     "social-data",
-    "ai-video",
-    "music-video",
-    "ecommerce-video",
-    "realtime-video",
-    "automation"
+    "workflow",
+    "automation",
+    "image-generation",
+    "video-generation",
+    "typescript"
   ],
   "license": "MIT"
 }
