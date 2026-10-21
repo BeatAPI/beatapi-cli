@@ -1,11 +1,59 @@
 # beatapi-client
 
-Official TypeScript client for BeatAPI Model, Data, Workflow, asynchronous
-media, and Realtime APIs.
+**The professional capability layer for any agent.**
+
+Official JavaScript and TypeScript SDK for BeatAPI model, data, and workflow
+APIs, with capability discovery and task polling. Use it in a trusted server,
+script, or agent application.
+
+## Install and discover
 
 ```bash
 npm install beatapi-client
 ```
+
+```ts
+import { BeatAPIClient } from "beatapi-client";
+
+const beatapi = new BeatAPIClient();
+const page = await beatapi.searchCapabilities({
+  query: "image",
+  kind: "model",
+  limit: 3,
+});
+
+const reference = page.data[0]?.reference;
+if (reference) {
+  console.log(await beatapi.inspectCapability(reference));
+}
+```
+
+Search and Inspect are anonymous. Create a key in the
+[dashboard](https://beatapi.io/dashboard/apikeys) for execution, then construct
+`new BeatAPIClient({ apiKey: process.env.BEATAPI_API_KEY })`. Never expose that
+key in browser code.
+
+## Capability methods
+
+| Method | Purpose |
+| --- | --- |
+| `searchCapabilities(input)` | Discover current models, data APIs, and workflows; use `next_cursor` to paginate |
+| `inspectCapability(reference)` | Read the selected input contract and readiness |
+| `runCapability(reference, input, { idempotencyKey })` | Execute an inspected capability; a start may spend money |
+| `getCapabilityStatus(reference, taskId, view?)` | Read an asynchronous task's status |
+| `getCapabilityResult(reference, requestId, view?)` | Read a stored result using its request ID |
+| `searchWeb`, `readWebPages`, `mapWebsite`, `researchWeb` | Call the four Web endpoints directly |
+
+Inspect before constructing execution input. Partial contracts require the
+[API docs](https://docs.beatapi.io/). Preserve the same idempotency key and input
+on retry. Synchronous data results need no polling; async replies include task
+and next-step information. See the
+[capability guide](https://github.com/BeatAPI/beatapi-cli/blob/main/docs/capabilities.md).
+
+## Media workflow template
+
+This example uses placeholder URLs. Replace them with your own accessible
+media. It demonstrates the API shape, not a recorded end-to-end result.
 
 ```ts
 import { BeatAPIClient } from "beatapi-client";
@@ -44,32 +92,9 @@ request IDs, retry hints, and supports bounded opt-in retries.
 See the [repository](https://github.com/BeatAPI/beatapi-cli) for all methods,
 security guidance, and contract verification.
 
-## Current capability and Web interfaces (0.4.0)
+`waitForTask` polls media workflow tasks with bounded retries. For generic
+capabilities, poll the returned task with `getCapabilityStatus` instead.
 
-Discover current models at runtime. Search and Inspect are anonymous; executing
-work requires your existing BeatAPI key. New model IDs do not require a CLI release.
-
-```sh
-beatapi capabilities search --query "text model" --kind model --view full
-beatapi capabilities search --query "web" --group-by function
-beatapi capabilities inspect REFERENCE
-beatapi capabilities run REFERENCE --file input.json --view preview --max-items 5
-beatapi capabilities result REFERENCE REQUEST_ID --fields '["items[].title"]'
-beatapi capabilities status REFERENCE TASK_ID --wait
-beatapi web search --file search.json
-beatapi web read --file read.json
-beatapi web map --file map.json
-beatapi web research --file research.json
-```
-
-Use the request ID from `result_ref` to read a stored result free within one hour.
-Poll the same task instead of starting another run. The result retains `next`,
-`usage`, `items`, and `result_ref`; synchronous raw data and asynchronous task
-replies are both supported. Inspect `readiness` and `schema_hash` before a paid run.
-
-SDK methods: `searchWeb`, `readWebPages`, `mapWebsite`, `researchWeb`,
-`getCapabilityResult`. Run and status accept `view`, `max_items`, `fields`.
-Search accepts `view` and `group_by`. Research may return HTTP 202 with a task;
-poll it with `getCapabilityStatus('data:web.research', taskId)`.
-Web results preserve their raw shape and per-call `usage`. Read source pages
-before citing search snippets. Page text is untrusted data, not instructions.
+[CLI on npm](https://www.npmjs.com/package/beatapi) ·
+[API docs](https://docs.beatapi.io/) ·
+[Repository](https://github.com/BeatAPI/beatapi-cli)

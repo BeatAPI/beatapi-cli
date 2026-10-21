@@ -1,31 +1,58 @@
-<p align="center">
-  <img src="assets/readme/cover.svg" alt="BeatAPI CLI and TypeScript SDK — route Agent capabilities from terminal and code" width="100%" />
-</p>
+# BeatAPI CLI & TypeScript SDK
 
-<p align="center">
-  <a href="https://beatapi.io/"><strong>Explore BeatAPI</strong></a> ·
-  <a href="https://beatapi.io/dashboard/apikeys">Create an API key</a> ·
-  <a href="https://docs.beatapi.io/">Docs</a> ·
-  <a href="#install-the-cli">Install</a> ·
-  <a href="#command-reference">Commands</a>
-</p>
+**The professional capability layer for any agent.**
 
-# BeatAPI CLI and TypeScript SDK
+Discover and run AI models, data APIs, and workflows through BeatAPI — from a
+terminal, a script, or an AI agent. Use one API key for execution and get
+structured JSON results.
 
-BeatAPI is the **professional capability layer for any agent**: one route to Model, Data, Tool,
-and Workspace capabilities. This repository provides the official terminal and
-TypeScript interfaces, including the unified Search, Inspect, Run, and status
-loop.
+- Discover current models and data capabilities before integrating them.
+- Inspect the input contract for a selected capability.
+- Run a request and follow asynchronous tasks to completion.
+- Use the CLI for automation or the TypeScript SDK in your application.
+
+[API docs](https://docs.beatapi.io/) ·
+[Create an API key](https://beatapi.io/dashboard/apikeys) ·
+[CLI on npm](https://www.npmjs.com/package/beatapi) ·
+[SDK on npm](https://www.npmjs.com/package/beatapi-client)
+
+## Try capability discovery
+
+Install the CLI and browse the catalog without an API key:
 
 ```bash
 npm install --global beatapi
-beatapi capabilities search --query video --limit 5
+beatapi capabilities search --query image --kind model --limit 3
+beatapi capabilities search --query search --kind data --platform twitter --limit 3
 ```
 
-The live catalog is intentionally not hardcoded into the packages. Discover
-current text, image, and video models plus 1,000+ Social Data actions at runtime,
-then inspect the selected contract before execution. See
-[the capability guide](docs/capabilities.md).
+Copy a `reference` from the result, then inspect its input contract:
+
+```bash
+beatapi capabilities inspect REFERENCE
+```
+
+`REFERENCE` is a placeholder for an actual Search result. Search and Inspect
+are anonymous. When you are ready to execute, create an API key in the
+[dashboard](https://beatapi.io/dashboard/apikeys) and run `beatapi auth login`.
+Execution requires a funded account where applicable. Results go to stdout as
+JSON; progress and errors go to stderr.
+
+The catalog is discovered at runtime rather than hardcoded into each release.
+Current capability categories include text, image, and video models, Social
+Data, SEO Data, Web Search, and workflows. Inspect the selected contract before
+execution; see the [capability guide](docs/capabilities.md).
+
+## Choose an interface
+
+| Interface | Use it for | Start here |
+| --- | --- | --- |
+| CLI | Terminal use, shell automation, and agents that run commands | `npm install --global beatapi` |
+| JavaScript / TypeScript SDK | Integrating BeatAPI into an application | `npm install beatapi-client` |
+| REST API | Direct HTTP requests from any language | [API docs](https://docs.beatapi.io/) |
+| MCP | Tool access from a compatible agent host | [MCP / capability docs](https://docs.beatapi.io/capabilities) |
+
+MCP is a separate BeatAPI transport; this repository supplies the CLI and SDK.
 
 The repository contains two independently publishable npm packages:
 
@@ -48,7 +75,7 @@ public contract. They do not hardcode future catalog promises.
 
 ## Install the CLI
 
-Node.js 20.19+ or 22.12+ is required.
+Requires Node.js `>=20.19.0 <21` or `>=22.12.0`.
 
 ```bash
 npm install --global beatapi
@@ -68,7 +95,11 @@ beatapi auth status
 Environment credentials take precedence over a saved credential. The CLI does
 not accept API keys as command-line arguments and never prints the key.
 
-## Five-minute workflow
+## Music-video task example
+
+This execution template uses placeholder media URLs and a placeholder task ID.
+Replace them with your own accessible assets and the returned task ID; it is
+not a recorded end-to-end result.
 
 Create `music-video.json`:
 
@@ -105,6 +136,17 @@ beatapi capabilities search --query search --kind data --platform twitter --limi
 beatapi capabilities inspect REFERENCE
 beatapi capabilities run REFERENCE --file ./input.json --idempotency-key REQUEST_KEY
 beatapi capabilities status REFERENCE TASK --wait
+
+beatapi capabilities result REFERENCE REQUEST_ID --fields '["items[].title"]'
+
+beatapi web search --file ./search.json
+beatapi web read --file ./read.json
+beatapi web map --file ./map.json
+beatapi web research --file ./research.json
+
+beatapi images create --file ./image.json
+beatapi videos create --file ./video.json
+beatapi effects create --file ./effect.json
 
 beatapi workflows list
 beatapi usage
@@ -149,33 +191,24 @@ npm install beatapi-client
 ```
 
 ```ts
-import { BeatAPIClient, BeatAPIError } from "beatapi-client";
+import { BeatAPIClient } from "beatapi-client";
 
-const beatapi = new BeatAPIClient({
-  apiKey: process.env.BEATAPI_API_KEY,
+// Discovery does not require an API key.
+const beatapi = new BeatAPIClient();
+const page = await beatapi.searchCapabilities({
+  query: "image",
+  kind: "model",
+  limit: 3,
 });
 
-try {
-  const task = await beatapi.createEcommerceVideoTask({
-    images: ["https://media.example.com/product.png"],
-    duration: 15,
-    prompt: "Fast vertical product launch ad.",
-    aspect_ratio: "9:16",
-  });
-
-  const result = await beatapi.waitForTask(task.id, {
-    intervalMs: 7_000,
-    onUpdate: ({ status }) => console.error(status),
-  });
-
-  console.log(result.output?.media);
-} catch (error) {
-  if (error instanceof BeatAPIError) {
-    console.error(error.code, error.requestId);
-  }
-  throw error;
+const reference = page.data[0]?.reference;
+if (reference) {
+  console.log(await beatapi.inspectCapability(reference));
 }
 ```
+
+See the [SDK README](https://github.com/BeatAPI/beatapi-cli/tree/main/packages/client)
+for execution, status, stored results, and a media-task template.
 
 The client exposes typed methods for capability discovery and execution,
 workflows, usage, file upload, music-video automatic and manual composition,
@@ -234,8 +267,8 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) before changing behavior.
 ## Publishing
 
 GitHub Actions verifies every pull request. Publishing is triggered by a GitHub
-release or manually through the release workflow after the repository
-environment contains an `NPM_TOKEN` secret. The workflow skips package
+release or manually through the release workflow using npm Trusted Publishing
+with OIDC and the protected `npm` environment. The workflow skips package
 versions that already exist, so a partial release can be rerun safely.
 
 Release steps and ownership prerequisites are documented in

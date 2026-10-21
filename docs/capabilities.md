@@ -1,20 +1,20 @@
 # Unified capabilities (0.4.0)
 
-These commands are available in the published `beatapi` 0.3.0 CLI and
-`beatapi-client` 0.3.0 package. Check `beatapi --version` and installed `--help`
-when diagnosing an older installation; 0.2.0 does not have these commands.
+Search, Inspect, Run, and status were introduced in CLI/SDK 0.3.0. Version 0.4.0
+adds current result views, stored-result retrieval, and direct Web commands.
+Check `beatapi --version` and `beatapi --help` when diagnosing an older install;
+0.2.0 does not have the capability commands.
 
 ## Read-only setup and discovery
 
 ```sh
-beatapi auth login
-beatapi auth status
 beatapi capabilities search --query image --kind model --limit 5
 beatapi capabilities search --query search --kind data --platform twitter --limit 5
 beatapi capabilities search --kind workflow --limit 5
 beatapi capabilities inspect <reference-returned-by-search>
 ```
 
+For execution, run `beatapi auth login`, then `beatapi auth status`.
 Login uses hidden terminal input and the OS credential manager. Agents must not
 request the key in chat. Search and Inspect are anonymous catalog operations;
 they do not validate a key. Use `auth status` for authenticated verification.
@@ -49,7 +49,7 @@ result and exits nonzero; resume status lookup, never create a new task to resum
 Discovery/status/result use a 35-second timeout; starts allow 95 seconds. Redirects are rejected. Research starts are never automatically retried.
 Read-only status requests may retry transient errors up to three attempts.
 
-All four commands emit JSON to stdout and accept `--output new-file.json`.
+All capability commands emit JSON to stdout and accept `--output new-file.json`.
 Output files use mode 0600 and are never overwritten. JSON is also emitted to
 stdout before saving; if saving fails, retain that result, do not restart a task.
 Progress/warnings go to stderr. Unknown/duplicate options are rejected.
